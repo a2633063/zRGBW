@@ -78,6 +78,91 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 				}
 			}
 
+			//解析HSL颜色
+			cJSON *p_hsl = cJSON_GetObjectItem(pJsonRoot, "hsl");
+			if (p_hsl && cJSON_IsArray(p_hsl) && cJSON_GetArraySize(p_hsl) == 4) {
+				cJSON *p_hsl_h = cJSON_GetArrayItem(p_hsl, 0);
+				cJSON *p_hsl_s = cJSON_GetArrayItem(p_hsl, 1);
+				cJSON *p_hsl_l = cJSON_GetArrayItem(p_hsl, 2);
+				cJSON *p_hsl_w = cJSON_GetArrayItem(p_hsl, 3);
+				if (cJSON_IsNumber(p_hsl_h) && cJSON_IsNumber(p_hsl_s) && cJSON_IsNumber(p_hsl_l) && cJSON_IsNumber(p_hsl_w)) {
+					os_printf("hsl:%d,%d,%d,%d\n", p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, p_hsl_w->valueint);
+
+					uint8_t r_val, g_val, b_val;
+					HSL2RGB(p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, &r_val, &g_val, &b_val);
+					os_printf("hsl2rgb:%d,%d,%d,%d\n", r_val, g_val, b_val, p_hsl_w->valueint);
+					user_led_set(r_val, g_val, b_val, p_hsl_w->valueint);
+				}
+			}
+			//解析RGB颜色
+			cJSON *p_rgb = cJSON_GetObjectItem(pJsonRoot, "rgb");
+			if (p_rgb && cJSON_IsArray(p_rgb) && cJSON_GetArraySize(p_rgb) == 4) {
+				cJSON *p_rgb_r = cJSON_GetArrayItem(p_rgb, 0);
+				cJSON *p_rgb_g = cJSON_GetArrayItem(p_rgb, 1);
+				cJSON *p_rgb_b = cJSON_GetArrayItem(p_rgb, 2);
+				cJSON *p_rgb_w = cJSON_GetArrayItem(p_rgb, 3);
+				if (cJSON_IsNumber(p_rgb_r) && cJSON_IsNumber(p_rgb_g) && cJSON_IsNumber(p_rgb_b) && cJSON_IsNumber(p_rgb_w)) {
+					os_printf("rgb:%d,%d,%d,%d\n", p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint);
+					user_led_set(p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint);
+				}
+			}
+
+			//设置开关
+			cJSON *p_on = cJSON_GetObjectItem(pJsonRoot, "on");
+			if (p_on && cJSON_IsNumber(p_on)) {
+				plug_retained = 1;
+				if (p_on->valueint == 0)
+					user_led_set(0, 0, 0, 0);
+				else
+					user_led_set(r, g, b, w);
+			}
+
+			if (p_hsl || p_rgb || p_on) {
+
+				char json_temp_str[17] = { 0 };
+
+				if (on == 0) {
+					cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse("[0,0,0,0]"));
+					cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse("[0,0,0,0]"));
+				} else {
+					os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r, g, b, w);
+					cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
+					uint16_t h_val;
+					uint8_t s_val, l_val;
+					RGB2HSL(r, g, b, &h_val, &s_val, &l_val);
+					os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w);
+					cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
+				}
+
+				plug_retained = 1;
+				cJSON_AddNumberToObject(json_send, "on", on);
+			}
+
+			//解析rgb hsl测试
+			cJSON *p_testcolor = cJSON_GetObjectItem(pJsonRoot, "test");
+			if (p_testcolor && cJSON_IsArray(p_testcolor) && cJSON_GetArraySize(p_testcolor) == 4) {
+				cJSON *p_testcolor_r = cJSON_GetArrayItem(p_testcolor, 0);
+				cJSON *p_testcolor_g = cJSON_GetArrayItem(p_testcolor, 1);
+				cJSON *p_testcolor_b = cJSON_GetArrayItem(p_testcolor, 2);
+				cJSON *p_testcolor_w = cJSON_GetArrayItem(p_testcolor, 3);
+				if (cJSON_IsNumber(p_testcolor_r) && cJSON_IsNumber(p_testcolor_g) && cJSON_IsNumber(p_testcolor_b)
+						&& cJSON_IsNumber(p_testcolor_w)) {
+
+					os_printf("test:%d,%d,%d,%d\n", p_testcolor_r->valueint, p_testcolor_g->valueint, p_testcolor_b->valueint,
+							p_testcolor_w->valueint);
+
+					uint16_t h_val;
+					uint8_t s_val, l_val, r_val, g_val, b_val;
+
+					RGB2HSL(p_testcolor_r->valueint, p_testcolor_g->valueint, p_testcolor_b->valueint, &h_val, &s_val, &l_val);
+					os_printf("hsl:%d,%d,%d\n", h_val, s_val, l_val);
+					HSL2RGB(h_val, s_val, l_val, &r_val, &g_val, &b_val);
+					os_printf("rgb:%d,%d,%d\n", r_val, g_val, b_val);
+					user_led_set(r_val, g_val, b_val, 0);
+					plug_retained = 1;
+				}
+			}
+
 			cJSON *p_setting = cJSON_GetObjectItem(pJsonRoot, "setting");
 			if (p_setting) {
 
@@ -189,25 +274,17 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 
 				if ((p_mqtt_ip && cJSON_IsString(p_mqtt_ip) && p_mqtt_port && cJSON_IsNumber(p_mqtt_port) && p_mqtt_user
 						&& cJSON_IsString(p_mqtt_user) && p_mqtt_password && cJSON_IsString(p_mqtt_password) && !user_mqtt_is_connect())) {
-					system_restart();
+					user_function_restart(200);
 				}
 			}
 
-			//设置on
-			cJSON *p_on = cJSON_GetObjectItem(pJsonRoot, "on");
-			if (p_on && cJSON_IsNumber(p_on)) {
-				update_user_config_flag = true;
-				user_config.on = p_on->valueint;
-			}
-
-			user_relay_set(user_config.on);
 			//解析定时任务-----------------------------------------------------------------
-			for (i = 0; i < TIME_TASK_NUM; i++) {
-				if (json_task_analysis(i, pJsonRoot, json_send))
-					update_user_config_flag = true;
-			}
+//			for (i = 0; i < TIME_TASK_NUM; i++) {
+//				if (json_task_analysis(i, pJsonRoot, json_send))
+//					update_user_config_flag = true;
+//			}
 
-			cJSON_AddNumberToObject(json_send, "on", user_config.on);
+//			cJSON_AddNumberToObject(json_send, "on", user_config.on);
 			cJSON_AddStringToObject(json_send, "name", user_config.name);
 
 			char *json_str = cJSON_Print(json_send);

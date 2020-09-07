@@ -5,6 +5,7 @@
 
 
 #define	SETTING_SAVE_ADDR  0x70
+#define	SETTING_SAVE_BOOT_TIMES_ADDR  0x71
 
 
 void user_setting_init(void);

@@ -17,10 +17,10 @@ MQTT_Client mqttClient;
 LOCAL bool is_connect = false;
 
 #define MAX_MQTT_TOPIC_SIZE         (40)
-#define MQTT_CLIENT_SUB_TOPIC   "device/zmops/%s/set"
-#define MQTT_CLIENT_PUB_TOPIC   "device/zmops/%s/state"
-#define MQTT_CLIENT_SENSER_TOPIC   "device/zmops/%s/sensor"
-#define MQTT_CLIENT_WILL_TOPIC   "device/zmops/%s/availability"
+#define MQTT_CLIENT_SUB_TOPIC   "device/zwrgb/%s/set"
+#define MQTT_CLIENT_PUB_TOPIC   "device/zwrgb/%s/state"
+#define MQTT_CLIENT_SENSER_TOPIC   "device/zwrgb/%s/sensor"
+#define MQTT_CLIENT_WILL_TOPIC   "device/zwrgb/%s/availability"
 
 char topic_state[MAX_MQTT_TOPIC_SIZE];
 char topic_set[MAX_MQTT_TOPIC_SIZE];

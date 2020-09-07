@@ -9,6 +9,30 @@
 
 #include "user_wifi.h"
 
+LOCAL os_timer_t timer_setting;
+
+void ICACHE_FLASH_ATTR user_setting_timer_func(void *arg) {
+	user_setting_set_boot_times(0);
+}
+void ICACHE_FLASH_ATTR
+user_setting_set_boot_times(uint32 val) {
+	if (val > 200)
+		val = 200;
+	spi_flash_erase_sector(SETTING_SAVE_BOOT_TIMES_ADDR);
+	spi_flash_write(SETTING_SAVE_BOOT_TIMES_ADDR * 4096, &val, 4);
+}
+
+uint32 ICACHE_FLASH_ATTR
+user_setting_get_boot_times(void) {
+	uint32 val;
+	spi_flash_read(SETTING_SAVE_BOOT_TIMES_ADDR * 4096, &val, 4);
+	if (val > 200) {
+		val=0;
+		user_setting_set_boot_times(val);
+	}
+	return val;
+}
+
 /*
  * 掉电读写设置参数
  * 修改设置后保存设置,上电后读取设置参数
@@ -19,8 +43,15 @@ user_setting_init(void) {
 
 
 	int16_t i, j;
+
+	boot_times =user_setting_get_boot_times();
+	boot_times++;
+	user_setting_set_boot_times(boot_times);
+
 	user_setting_get_config();
 
+	os_printf("Boot times:%d\r\n", boot_times);
+	os_printf("Config version:%d\r\n", user_config.version);
 	os_printf("Device name:\"%s\"\r\n", user_config.name);
 	os_printf("MQTT Service ip:\"%s:%d\"\r\n", user_config.mqtt_ip, user_config.mqtt_port);
 	os_printf("MQTT Service user:\"%s\"\r\n", user_config.mqtt_user);
@@ -37,6 +68,10 @@ user_setting_init(void) {
 //	                user_config.plug[i].task[j].repeat);
 //	        }
 //	    }
+
+	os_timer_disarm(&timer_setting);
+	os_timer_setfn(&timer_setting, (os_timer_func_t *) user_setting_timer_func, NULL);
+	os_timer_arm(&timer_setting, 2500, 0);
 }
 
 void ICACHE_FLASH_ATTR
@@ -88,6 +123,10 @@ user_setting_get_config(void) {
 				user_config.task[j].repeat = 127;
 				user_config.task[j].on = 0;
 				user_config.task[j].action = 1;
+				user_config.task[j].w = 0;
+				user_config.task[j].r = 0;
+				user_config.task[j].g = 0;
+				user_config.task[j].b = 0;
 			}
 
 		user_setting_set_config();

@@ -5,10 +5,10 @@
 #define VERSION "v0.0.1"
 
 #define TYPE 8
-#define TYPE_NAME "zMOPS"
+#define TYPE_NAME "zWRGB"
 
-#define DEVICE_NAME "zMOPS_%02X%02X"
-#define MDNS_DEVICE_NAME "zMOPS_%s"
+#define DEVICE_NAME "zWRGB_%02X%02X"
+#define MDNS_DEVICE_NAME "zWRGB_%s"
 
 #define USER_CONFIG_VERSION 1
 
@@ -21,8 +21,12 @@ typedef struct {
 	int8_t hour;      //小时
 	int8_t minute;    //分钟
 	uint8_t repeat; //bit7:一次   bit6-0:周日-周一
-	int8_t action;    //动作
 	int8_t on;    //开关
+	int8_t action;    //动作
+	uint8_t r;    //r
+	uint8_t g;    //g
+	uint8_t b;    //b
+	uint8_t w;    //w
 } user_plug_task_config_t;
 
 
@@ -44,5 +48,11 @@ typedef struct {
 extern char rtc_init;
 extern user_config_t user_config;
 
+extern uint8_t boot_times;
+extern uint8_t r;    //r
+extern uint8_t g;    //g
+extern uint8_t b;    //b
+extern uint8_t w;    //w
+extern int8_t on;    //开关
 #endif
 

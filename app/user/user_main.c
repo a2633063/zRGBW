@@ -17,6 +17,12 @@
 #include "user_webserver.h"
 
 user_config_t user_config;
+uint8_t boot_times = 0;
+uint8_t r=0;    //r
+uint8_t g=0;    //g
+uint8_t b=0;    //b
+uint8_t w=255;    //w
+int8_t on;    //开关
 
 #if ((SPI_FLASH_SIZE_MAP == 0) || (SPI_FLASH_SIZE_MAP == 1))
 #error "The flash map is not supported"
@@ -71,6 +77,13 @@ void ICACHE_FLASH_ATTR user_pre_init(void)
 	}
 }
 
+void system_init_done(void) {
+	if (boot_times >= 3) { //三次后开始配对
+		user_wifi_AP();
+	}else{
+		user_led_set(r,g,b,w);
+	}
+}
 
 void ICACHE_FLASH_ATTR
 user_init(void)
@@ -84,12 +97,12 @@ user_init(void)
 	os_printf("FW version:%s\n", VERSION);
 
 	user_setting_init();
-	user_key_init();
+//	user_key_init();
 	user_led_init();
 
 	user_wifi_init();
-	user_sntp_init();
-	user_os_timer_init();
+//	user_sntp_init();
+	//user_os_timer_init();
 	//UDP初始化,监听端口10182,当接收到特定字符串时,返回本设备IP及MAC地址
 	user_devicefind_init(10182);
 //	TCP初始化,监听端口10191
@@ -97,7 +110,6 @@ user_init(void)
 	//TCP初始化 80端口 webserver
 	user_webserver_init(80);
 
-
-	user_relay_set(user_config.on);
+	system_init_done_cb(system_init_done);
 }
 
