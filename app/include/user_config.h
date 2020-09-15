@@ -2,13 +2,13 @@
 #define __USER_CONFIG_H__
 #include "os_type.h"
 
-#define VERSION "v0.0.1"
+#define VERSION "v0.0.2"
 
 #define TYPE 8
-#define TYPE_NAME "zWRGB"
+#define TYPE_NAME "zRGBW"
 
-#define DEVICE_NAME "zWRGB_%02X%02X"
-#define MDNS_DEVICE_NAME "zWRGB_%s"
+#define DEVICE_NAME "zRGBW_%02X%02X"
+#define MDNS_DEVICE_NAME "zRGBW_%s"
 
 #define USER_CONFIG_VERSION 1
 

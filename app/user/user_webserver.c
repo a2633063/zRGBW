@@ -11,11 +11,11 @@
 #include "user_webserver.h"
 #include "user_wifi.h"
 
-extern const unsigned char wififail[0xAC9];
+extern const unsigned char wififail[0xACA];
 
-extern const unsigned char wifisetting[3373];
+extern const unsigned char wifisetting[3369];
 
-extern const unsigned char wifisuccess[0x9BC];
+extern const unsigned char wifisuccess[0x9BD];
 
 LOCAL void ICACHE_FLASH_ATTR data_send(void *arg, bool responseOK, char *psend);
 
@@ -343,7 +343,7 @@ data_send(void *arg, bool responseOK, char *psend) {
 	os_memset(httphead, 0, 256);
 
 	if (responseOK) {
-		os_sprintf(httphead, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: zS7\r\n", psend ? os_strlen(psend) : 0);
+		os_sprintf(httphead, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nServer: zControl\r\n", psend ? os_strlen(psend) : 0);
 
 		if (psend) {
 			os_sprintf(httphead + os_strlen(httphead),
@@ -358,7 +358,7 @@ data_send(void *arg, bool responseOK, char *psend) {
 		}
 	} else {
 		os_sprintf(httphead, "HTTP/1.0 400 BadRequest\r\n\
-Content-Length: 0\r\nServer: zS7\r\n\n");
+Content-Length: 0\r\nServer: zControl\r\n\n");
 		length = os_strlen(httphead);
 	}
 
