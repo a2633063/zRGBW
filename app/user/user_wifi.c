@@ -185,8 +185,8 @@ void ICACHE_FLASH_ATTR user_wifi_init(void) {
 	if (i > 0) {
 		user_mqtt_init();
 	} else {	//按住按键开机,为热点模式
-
-		user_wifi_AP();
+		boot_times=10;	//系统初始化完成后再判断是否为配网模式
+		//user_wifi_AP();
 		return;
 	}
 	os_printf("user_wifi_init\n");

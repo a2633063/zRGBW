@@ -18,10 +18,10 @@
 
 user_config_t user_config;
 uint8_t boot_times = 0;
-uint8_t r=0;    //r
-uint8_t g=0;    //g
-uint8_t b=0;    //b
-uint8_t w=255;    //w
+uint8_t r = 0;    //r
+uint8_t g = 0;    //g
+uint8_t b = 0;    //b
+uint8_t w = 255;    //w
 int8_t on;    //开关
 
 #if ((SPI_FLASH_SIZE_MAP == 0) || (SPI_FLASH_SIZE_MAP == 1))
@@ -60,36 +60,32 @@ int8_t on;    //开关
 #error "The flash map is not supported"
 #endif
 
-static const partition_item_t at_partition_table[] = {
-    { SYSTEM_PARTITION_BOOTLOADER, 						0x0, 												0x1000},
-    { SYSTEM_PARTITION_OTA_1,   						0x1000, 											SYSTEM_PARTITION_OTA_SIZE},
-    { SYSTEM_PARTITION_OTA_2,   						SYSTEM_PARTITION_OTA_2_ADDR, 						SYSTEM_PARTITION_OTA_SIZE},
-    { SYSTEM_PARTITION_RF_CAL,  						SYSTEM_PARTITION_RF_CAL_ADDR, 						0x1000},
-    { SYSTEM_PARTITION_PHY_DATA, 						SYSTEM_PARTITION_PHY_DATA_ADDR, 					0x1000},
-    { SYSTEM_PARTITION_SYSTEM_PARAMETER, 				SYSTEM_PARTITION_SYSTEM_PARAMETER_ADDR, 			0x3000},
-};
+static const partition_item_t at_partition_table[] = { { SYSTEM_PARTITION_BOOTLOADER, 0x0, 0x1000 }, { SYSTEM_PARTITION_OTA_1, 0x1000,
+		SYSTEM_PARTITION_OTA_SIZE }, { SYSTEM_PARTITION_OTA_2, SYSTEM_PARTITION_OTA_2_ADDR, SYSTEM_PARTITION_OTA_SIZE }, { SYSTEM_PARTITION_RF_CAL,
+		SYSTEM_PARTITION_RF_CAL_ADDR, 0x1000 }, { SYSTEM_PARTITION_PHY_DATA, SYSTEM_PARTITION_PHY_DATA_ADDR, 0x1000 }, {
+		SYSTEM_PARTITION_SYSTEM_PARAMETER, SYSTEM_PARTITION_SYSTEM_PARAMETER_ADDR, 0x3000 }, };
 
-void ICACHE_FLASH_ATTR user_pre_init(void)
-{
-    if(!system_partition_table_regist(at_partition_table, sizeof(at_partition_table)/sizeof(at_partition_table[0]),SPI_FLASH_SIZE_MAP)) {
+void ICACHE_FLASH_ATTR user_pre_init(void) {
+	if (!system_partition_table_regist(at_partition_table, sizeof(at_partition_table) / sizeof(at_partition_table[0]), SPI_FLASH_SIZE_MAP)) {
 		os_printf("system_partition_table_regist fail\r\n");
-		while(1);
+		while (1)
+			;
 	}
 }
 
 void system_init_done(void) {
-	if (boot_times >= 3) { //三次后开始配对
+	if (boot_times >= 5) { //5次后开始配对
 		user_wifi_AP();
-	}else{
-		user_led_set(r,g,b,w);
+		user_led_mode_wificonfig();
+	} else {
+		user_led_set(r, g, b, w, 0);
 	}
 }
 
 void ICACHE_FLASH_ATTR
-user_init(void)
-{
+user_init(void) {
 	int i, j;
-	uint32 x;
+	uint32_t x;
 //	system_uart_swap();
 	uart_init(115200, 115200);
 	os_printf(" \n \nStart user%d.bin\n", system_upgrade_userbin_check() + 1);
