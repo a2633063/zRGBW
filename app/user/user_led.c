@@ -14,6 +14,10 @@ static uint8_t g_old;
 static uint8_t b_old;
 static uint8_t w_old;
 
+static uint8_t r_real;	//记录当前颜色,包含渐变过程
+static uint8_t g_real;
+static uint8_t b_real;
+static uint8_t w_real;
 LOCAL os_timer_t timer_led;
 void ICACHE_FLASH_ATTR
 user_led_timer_func(void *arg0) {
@@ -41,7 +45,7 @@ user_led_timer_func(void *arg0) {
 		user_led_set_temp(r_val, g_val, b_val, w_val);
 		if (step >= LED_GRADIENT_STEP) {
 			step = 0;
-			user_led_set(r_now, g_now, b_now, w_now, 0);
+			user_led_set_temp(r_now, g_now, b_now, w_now);
 			os_timer_disarm(&timer_led);
 		}
 
@@ -68,6 +72,10 @@ user_led_init(void) {
 void ICACHE_FLASH_ATTR
 user_led_set_temp(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t w_val) {
 	os_printf("user_led_set:%d,%d,%d,%d\n", r_val, g_val, b_val, w_val);
+	r_real=r_val;
+	g_real=g_val;
+	b_real=b_val;
+	w_real=w_val;
 	pwm_set_duty((uint32) r_val * 40000 / 459, 0);
 	pwm_set_duty((uint32) g_val * 40000 / 459, 1);
 	pwm_set_duty((uint32) b_val * 40000 / 459, 2);
@@ -99,10 +107,10 @@ user_led_set(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t w_val, uint8_t
 
 	} else {
 
-		r_old = r_now;
-		g_old = g_now;
-		b_old = b_now;
-		w_old = w_now;
+		r_old = r_real;
+		g_old = g_real;
+		b_old = b_real;
+		w_old = w_real;
 
 		r_now = r_val;
 		g_now = g_val;
