@@ -12,12 +12,12 @@
 #include "user_json.h"
 #include "user_setting.h"
 #include "user_function.h"
+#include "user_led.h"
 
 bool ICACHE_FLASH_ATTR json_task_analysis(unsigned char x, cJSON * pJsonRoot, cJSON * pJsonSend);
 
 void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 	uint8_t i, gradient = 0;
-	uint8_t r_new=r, g_new=g, b_new=b, w_new=w;
 	bool update_user_config_flag = false;   //标志位,记录最后是否需要更新储存的数据
 	uint8_t plug_retained = 0;
 	cJSON *pJsonRoot = cJSON_Parse(jsonRoot);	//首先整体判断是否为一个json格式的数据
@@ -95,10 +95,9 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 				if (cJSON_IsNumber(p_hsl_h) && cJSON_IsNumber(p_hsl_s) && cJSON_IsNumber(p_hsl_l) && cJSON_IsNumber(p_hsl_w)) {
 					os_printf("hsl:%d,%d,%d,%d\n", p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, p_hsl_w->valueint);
 
-					HSL2RGB(p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, &r_new, &g_new, &b_new);
-					w_new = p_hsl_w->valueint;
-					os_printf("hsl2rgb:%d,%d,%d,%d\n", r_new, g_new, b_new, w_new);
-					user_led_set(r_new, g_new, b_new, w_new);
+					HSL2RGB(p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, &r_now, &g_now, &b_now);
+					w_now = p_hsl_w->valueint;
+					user_led_set(r_now, g_now, b_now, w_now, gradient);
 				}
 			}
 			//解析RGB颜色
@@ -111,11 +110,7 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 				if (cJSON_IsNumber(p_rgb_r) && cJSON_IsNumber(p_rgb_g) && cJSON_IsNumber(p_rgb_b) && cJSON_IsNumber(p_rgb_w)) {
 					os_printf("rgb:%d,%d,%d,%d\n", p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint);
 
-					r_new = p_rgb_r->valueint;
-					g_new = p_rgb_g->valueint;
-					b_new = p_rgb_b->valueint;
-					w_new = p_rgb_w->valueint;
-					user_led_set(r_new, g_new, b_new, w_new, gradient);
+					user_led_set(p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint, gradient);
 				}
 			}
 
@@ -126,10 +121,6 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 				if (p_on->valueint == 0)
 					user_led_set(0, 0, 0, 0, gradient);
 				else {
-					r_new = r;
-					g_new = g;
-					b_new = b;
-					w_new = w;
 					user_led_set(r, g, b, w, gradient);
 				}
 			}
@@ -138,18 +129,13 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 
 				char json_temp_str[17] = { 0 };
 
-				if (on == 0) {
-					cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse("[0,0,0,0]"));
-					cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse("[0,0,0,0]"));
-				} else {
-					os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_new, g_new, b_new, w_new);
-					cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
-					uint16_t h_val;
-					uint8_t s_val, l_val;
-					RGB2HSL(r, g, b, &h_val, &s_val, &l_val);
-					os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w_new);
-					cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
-				}
+				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_now, g_now, b_now, w_now);
+				cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
+				uint16_t h_val;
+				uint8_t s_val, l_val;
+				RGB2HSL(r_now, g_now, b_now, &h_val, &s_val, &l_val);
+				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w);
+				cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
 
 				plug_retained = 1;
 				cJSON_AddNumberToObject(json_send, "on", on);

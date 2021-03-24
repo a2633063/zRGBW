@@ -53,6 +53,12 @@ extern uint8_t r;    //r
 extern uint8_t g;    //g
 extern uint8_t b;    //b
 extern uint8_t w;    //w
+
+extern uint8_t r_now;	//记录当前显示颜色,可以为0
+extern uint8_t g_now;
+extern uint8_t b_now;
+extern uint8_t w_now;
+
 extern int8_t on;    //开关
 #endif
 

@@ -18,10 +18,17 @@
 
 user_config_t user_config;
 uint8_t boot_times = 0;
-uint8_t r = 0;    //r
+uint8_t r = 0;    //r		//记录关闭前的颜色,不能全为0
 uint8_t g = 0;    //g
 uint8_t b = 0;    //b
 uint8_t w = 255;    //w
+
+uint8_t r_now;	//记录当前显示颜色,可以为0
+uint8_t g_now;
+uint8_t b_now;
+uint8_t w_now;
+
+
 int8_t on;    //开关
 
 #if ((SPI_FLASH_SIZE_MAP == 0) || (SPI_FLASH_SIZE_MAP == 1))
