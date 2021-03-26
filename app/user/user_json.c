@@ -134,7 +134,7 @@ void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
 				uint16_t h_val;
 				uint8_t s_val, l_val;
 				RGB2HSL(r_now, g_now, b_now, &h_val, &s_val, &l_val);
-				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w);
+				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w_now);
 				cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
 
 				plug_retained = 1;
