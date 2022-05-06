@@ -1,130 +1,94 @@
+#include <ctype.h>
 #include "ets_sys.h"
+#include "uart.h"
 #include "osapi.h"
-#include "os_type.h"
-#include "mem.h"
-
-#include "../mqtt/include/debug.h"
-#include "../mqtt/include/mqtt.h"
-#include "../mqtt/include/mqtt_config.h"
-
+#include "user_interface.h"
 #include "user_config.h"
-#include "user_function.h"
-#include "user_setting.h"
-#include "user_wifi.h"
-#include "user_mqtt.h"
-#include "user_json.h"
-MQTT_Client mqttClient;
-LOCAL bool is_connect = false;
+#include "zlib.h"
+#include "mqtt_msg.h"
 
-#define MAX_MQTT_TOPIC_SIZE         (40)
-#define MQTT_CLIENT_SUB_TOPIC   "device/zrgbw/%s/set"
-#define MQTT_CLIENT_PUB_TOPIC   "device/zrgbw/%s/state"
-#define MQTT_CLIENT_SENSER_TOPIC   "device/zrgbw/%s/sensor"
-#define MQTT_CLIENT_WILL_TOPIC   "device/zrgbw/%s/availability"
+#define MAX_MQTT_TOPIC_SIZE         (64)
 
-char topic_state[MAX_MQTT_TOPIC_SIZE];
-char topic_set[MAX_MQTT_TOPIC_SIZE];
-char topic_senser[MAX_MQTT_TOPIC_SIZE];
-char willtopic[MAX_MQTT_TOPIC_SIZE];
+#define MQTT_CLIENT_SUB_TOPIC   "device/%s/%s/set"
+#define MQTT_CLIENT_PUB_TOPIC   "device/%s/%s/state"
+#define MQTT_CLIENT_SENSOR_TOPIC   "device/%s/%s/sensor"
+#define MQTT_CLIENT_WILL_TOPIC   "device/%s/%s/availability"
 
-#define MQTT_TIMER_REPEATTIME 500
-LOCAL os_timer_t timer_mqtt;
-LOCAL uint16_t status = 0;
-void ICACHE_FLASH_ATTR user_mqtt_timer_func(void *arg) {
-	status++;
-	if (status == 1) {
-		user_mqtt_send_topic(willtopic, "1\0", 1, 1);
-	} else if (status >= 5 + MQTT_KEEPALIVE * (1000 / MQTT_TIMER_REPEATTIME)) {
-		user_mqtt_send_topic(willtopic, "1\0", 1, 1);
-		os_timer_disarm(&timer_mqtt);
-		status = 0;
-	}
+static char topic_state[MAX_MQTT_TOPIC_SIZE];
+static char topic_set[MAX_MQTT_TOPIC_SIZE];
+static char topic_sensor[MAX_MQTT_TOPIC_SIZE];
+static char willtopic[MAX_MQTT_TOPIC_SIZE];
+
+bool ICACHE_FLASH_ATTR _user_mqtt_received_cb(uint32_t *arg, const char* topic, uint32_t topic_len, const char *data,
+        uint32_t data_len)
+{
+    if(os_strlen(data) > 0) zlib_mqtt_send_message(topic, "", 1, 1);
+    return true;
 }
 
-void mqttConnectedCb(uint32_t *args) {
-	uint8_t i;
-	is_connect = true;
-	MQTT_Client* client = (MQTT_Client*) args;
-	os_printf("MQTT: Connected\r\n");
-	MQTT_Subscribe(client, topic_set, 0);
+/**
+ * 函  数  名: user_mqtt_init
+ * 函数说明: mqtt初始化
+ * 参        数: 无
+ * 返        回: 无
+ */
+void ICACHE_FLASH_ATTR user_mqtt_init(void)
+{
+    uint8_t i;
 
-	os_timer_disarm(&timer_mqtt);
-	os_timer_setfn(&timer_mqtt, (os_timer_func_t *) user_mqtt_timer_func, NULL);
-	os_timer_arm(&timer_mqtt, MQTT_TIMER_REPEATTIME, 1);
+    //初始化topic字符串
 
+    os_sprintf(topic_set, MQTT_CLIENT_SUB_TOPIC, strlwr(TYPE_NAME), zlib_wifi_get_mac_str());
+    os_sprintf(topic_state, MQTT_CLIENT_PUB_TOPIC, strlwr(TYPE_NAME), zlib_wifi_get_mac_str());
+    os_sprintf(topic_sensor, MQTT_CLIENT_SENSOR_TOPIC, strlwr(TYPE_NAME), zlib_wifi_get_mac_str());
+    os_sprintf(willtopic, MQTT_CLIENT_WILL_TOPIC, strlwr(TYPE_NAME), zlib_wifi_get_mac_str());
+
+    os_printf("topic_set:%s\n", topic_set);
+    os_printf("topic_state:%s\n", topic_state);
+    os_printf("topic_sensor:%s\n", topic_sensor);
+    os_printf("willtopic:%s\n", willtopic);
+
+    mqtt_connect_info_t mqtt_info;
+    mqtt_info.client_id = zlib_wifi_get_mac_str();
+    mqtt_info.username = user_config.mqtt_user;
+    mqtt_info.password = user_config.mqtt_password;
+    mqtt_info.will_topic = willtopic;
+    mqtt_info.will_message = "0";
+    mqtt_info.keepalive = 20;
+    mqtt_info.will_qos = 1;
+    mqtt_info.will_retain = 1;
+    mqtt_info.clean_session = 0;
+    zlib_mqtt_init(user_config.mqtt_ip, user_config.mqtt_port, &mqtt_info);
+
+    static zlib_mqtt_topic_info_t mqtt_topic[1];
+    mqtt_topic[0].topic = topic_set;
+    mqtt_topic[0].qos = 1;
+
+    static zlib_mqtt_message_info_t message[1];
+    message[0].topic = willtopic;
+    message[0].message = "1";
+    message[0].qos = 1;
+    message[0].retain = 1;
+
+    zlib_mqtt_set_online_message(message, sizeof(message) / sizeof(zlib_mqtt_message_info_t));
+    zlib_mqtt_subscribe(mqtt_topic, sizeof(mqtt_topic) / sizeof(zlib_mqtt_topic_info_t));
+    zlib_mqtt_set_received_callback(_user_mqtt_received_cb); //是否清楚set主题的retain数据
+    os_printf("user mqtt init\n");
 }
 
-BOOL ICACHE_FLASH_ATTR
-user_mqtt_send_topic(const uint8_t *topic, const uint8_t * data, char qos, uint8_t retained) {
-	return is_connect ? MQTT_Publish(&mqttClient, topic, data, os_strlen(data), qos, retained) : false;
+char * ICACHE_FLASH_ATTR user_mqtt_get_state_topic()
+{
+    return topic_state;
 }
-
-BOOL ICACHE_FLASH_ATTR
-user_mqtt_send(const uint8_t * data, char qos, char retained) {
-	return user_mqtt_send_topic(topic_state, data, qos, retained);
+char * ICACHE_FLASH_ATTR user_mqtt_get_set_topic()
+{
+    return topic_set;
 }
-BOOL ICACHE_FLASH_ATTR
-user_mqtt_send_senser(char *arg, char qos, char retained) {
-	return user_mqtt_send_topic(topic_senser, arg, qos, retained);
+char * ICACHE_FLASH_ATTR user_mqtt_get_sensor_topic()
+{
+    return topic_sensor;
 }
-void mqttDisconnectedCb(uint32_t *args) {
-	os_timer_disarm(&timer_mqtt);
-	MQTT_Client* client = (MQTT_Client*) args;
-	os_printf("MQTT: �Ͽ�����\r\n");
-	is_connect = false;
+char * ICACHE_FLASH_ATTR user_mqtt_get_will_topic()
+{
+    return willtopic;
 }
-
-void mqttPublishedCb(uint32_t *args) {
-	MQTT_Client* client = (MQTT_Client*) args;
-	os_printf("MQTT: Published\r\n");
-}
-
-void mqttDataCb(uint32_t *args, const char* topic, uint32_t topic_len, const char *data, uint32_t data_len) {
-	char *topicBuf = (char*) os_zalloc(topic_len + 1), *dataBuf = (char*) os_zalloc(data_len + 1);
-
-	MQTT_Client* client = (MQTT_Client*) args;
-
-	os_memcpy(topicBuf, topic, topic_len);
-	topicBuf[topic_len] = 0;
-
-	os_memcpy(dataBuf, data, data_len);
-	dataBuf[data_len] = 0;
-
-//os_printf("Receive topic: %s, data: %s \r\n", topicBuf, dataBuf);
-	user_json_analysis(false, dataBuf);
-	os_free(topicBuf);
-	os_free(dataBuf);
-}
-
-void ICACHE_FLASH_ATTR user_mqtt_connect(void) {
-	MQTT_Connect(&mqttClient);
-}
-
-void ICACHE_FLASH_ATTR user_mqtt_disconnect(void) {
-	MQTT_Disconnect(&mqttClient);
-}
-
-void ICACHE_FLASH_ATTR user_mqtt_init(void) {
-
-	os_sprintf(topic_set, MQTT_CLIENT_SUB_TOPIC, strMac);
-	os_sprintf(topic_state, MQTT_CLIENT_PUB_TOPIC, strMac);
-	os_sprintf(topic_senser, MQTT_CLIENT_SENSER_TOPIC, strMac);
-	os_sprintf(willtopic, MQTT_CLIENT_WILL_TOPIC, strMac);
-
-//MQTT��ʼ��
-	MQTT_InitConnection(&mqttClient, user_config.mqtt_ip, user_config.mqtt_port, NO_TLS);
-
-	MQTT_InitClient(&mqttClient, strMac, user_config.mqtt_user, user_config.mqtt_password, MQTT_KEEPALIVE, 1);
-
-	MQTT_InitLWT(&mqttClient, willtopic, "0", 1, 1);
-	MQTT_OnConnected(&mqttClient, mqttConnectedCb);
-	MQTT_OnDisconnected(&mqttClient, mqttDisconnectedCb);
-	MQTT_OnPublished(&mqttClient, mqttPublishedCb);
-	MQTT_OnData(&mqttClient, mqttDataCb);
-	os_printf("user_mqtt_init\n");
-}
-
-bool ICACHE_FLASH_ATTR user_mqtt_is_connect() {
-	return is_connect;
-}
-

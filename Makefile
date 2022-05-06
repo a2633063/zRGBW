@@ -26,7 +26,7 @@ BOOT?=new
 APP?=1
 SPI_SPEED?=40
 SPI_MODE?=QIO
-SPI_SIZE_MAP?=2
+SPI_SIZE_MAP?=4
 
 ifeq ($(BOOT), new)
     boot = new
@@ -410,6 +410,6 @@ $(foreach image,$(GEN_IMAGES),$(eval $(call MakeImage,$(basename $(image)))))
 # Required for each makefile to inherit from the parent
 #
 
-INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)include/$(TARGET) -I $(PDIR)driver_lib/include
+INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)include/$(TARGET)
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile

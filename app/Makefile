@@ -22,9 +22,9 @@ GEN_IMAGES= eagle.app.v6.out
 GEN_BINS= eagle.app.v6.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS=    \
-	mqtt	\
-	cJson	\
-    user	
+	user    \
+	zlib    \
+	driver
 
 endif # } PDIR
 
@@ -33,11 +33,11 @@ LDDIR = ../ld
 
 CCFLAGS += -Os
 
-TARGET_LDFLAGS =        \
-    -nostdlib       \
-    -Wl,-EL \
-    --longcalls \
-    --text-section-literals
+TARGET_LDFLAGS =		\
+	-nostdlib		\
+	-Wl,-EL \
+	--longcalls \
+	--text-section-literals
 
 ifeq ($(FLAVOR),debug)
     TARGET_LDFLAGS += -g -O2
@@ -48,36 +48,39 @@ ifeq ($(FLAVOR),release)
 endif
 
 COMPONENTS_eagle.app.v6 = \
-	mqtt/libmqtt.a	\
-	cJson/libcJson.a	\
-	user/libuser.a	
+	user/libuser.a  \
+	zlib/mqtt/libmqtt.a		\
+	zlib/cJson/libcJson.a		\
+	zlib/zlib.a		\
+	driver/libdriver.a
 
 LINKFLAGS_eagle.app.v6 = \
-    -L../lib        \
-    -nostdlib   \
+	-L../lib        \
+	-nostdlib	\
     -T$(LD_FILE)   \
-    -Wl,--no-check-sections \
-    -Wl,--gc-sections	\
-    -u call_user_start  \
-    -Wl,-static                     \
-    -Wl,--start-group                   \
-    -lc                 \
-    -lgcc                   \
-    -lhal                   \
-    -lphy   \
-    -lpp    \
-    -lnet80211  \
-    -llwip  \
-    -lwpa   \
-    -lcrypto    \
-    -lmain  \
-    -ldriver	\
+	-Wl,--no-check-sections	\
+	-Wl,--gc-sections	\
+    -u call_user_start	\
+	-Wl,-static						\
+	-Wl,--start-group					\
+	-lc					\
+	-lgcc					\
+	-lhal					\
+	-lphy	\
+	-lpp	\
+	-lnet80211	\
+	-llwip	\
+	-lwpa	\
+	-lcrypto	\
+	-lmain	\
 	-ljson	\
 	-lupgrade\
-	-lssl	\
+	-lmbedtls	\
 	-lpwm	\
-    $(DEP_LIBS_eagle.app.v6)                    \
-    -Wl,--end-group
+	-ldriver \
+	-lsmartconfig \
+	$(DEP_LIBS_eagle.app.v6)					\
+	-Wl,--end-group
 
 DEPENDS_eagle.app.v6 = \
                 $(LD_FILE) \
@@ -91,21 +94,22 @@ DEPENDS_eagle.app.v6 = \
 #   for a subtree within the makefile rooted therein
 #
 
-#UNIVERSAL_TARGET_DEFINES =     \
+#UNIVERSAL_TARGET_DEFINES =		\
 
 # Other potential configuration flags include:
-#   -DTXRX_TXBUF_DEBUG
-#   -DTXRX_RXBUF_DEBUG
-#   -DWLAN_CONFIG_CCX
-CONFIGURATION_DEFINES = -DICACHE_FLASH
+#	-DTXRX_TXBUF_DEBUG
+#	-DTXRX_RXBUF_DEBUG
+#	-DWLAN_CONFIG_CCX
+#    -DGLOBAL_DEBUG_ON
+CONFIGURATION_DEFINES =	-DICACHE_FLASH 
 
-DEFINES +=              \
-    $(UNIVERSAL_TARGET_DEFINES) \
-    $(CONFIGURATION_DEFINES)
+DEFINES +=				\
+	$(UNIVERSAL_TARGET_DEFINES)	\
+	$(CONFIGURATION_DEFINES)
 
-DDEFINES +=             \
-    $(UNIVERSAL_TARGET_DEFINES) \
-    $(CONFIGURATION_DEFINES)
+DDEFINES +=				\
+	$(UNIVERSAL_TARGET_DEFINES)	\
+	$(CONFIGURATION_DEFINES)
 
 
 #############################################################
@@ -120,7 +124,7 @@ DDEFINES +=             \
 # Required for each makefile to inherit from the parent
 #
 
-INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)include/mqtt -I $(PDIR)include/sJson
+INCLUDES := $(INCLUDES) -I $(PDIR)include -I $(PDIR)zlib -I $(PDIR)user  -I $(PDIR)driver/include/driver  -I $(PDIR)zlib/cJson -I $(PDIR)zlib/mqtt -I $(PDIR)zlib/mqtt/include
 PDIR := ../$(PDIR)
 sinclude $(PDIR)Makefile
 

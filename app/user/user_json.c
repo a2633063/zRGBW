@@ -1,348 +1,244 @@
 #include "ets_sys.h"
+#include "uart.h"
 #include "osapi.h"
-#include "os_type.h"
-#include "mem.h"
 #include "user_interface.h"
-#include "espconn.h"
-
 #include "user_config.h"
-#include "../cJson/cJSON.h"
-#include "user_wifi.h"
-#include "user_update.h"
-#include "user_json.h"
-#include "user_setting.h"
-#include "user_function.h"
-#include "user_led.h"
+#include "zlib.h"
 
-bool ICACHE_FLASH_ATTR json_task_analysis(unsigned char x, cJSON * pJsonRoot, cJSON * pJsonSend);
+#include "user_mqtt.h"
 
-void ICACHE_FLASH_ATTR user_json_analysis(bool udp_flag, u8* jsonRoot) {
-	uint8_t i, gradient = 0;
-	bool update_user_config_flag = false;   //±êÖ¾Î»,¼ÇÂ¼×îºóÊÇ·ñĞèÒª¸üĞÂ´¢´æµÄÊı¾İ
-	uint8_t plug_retained = 0;
-	cJSON *pJsonRoot = cJSON_Parse(jsonRoot);	//Ê×ÏÈÕûÌåÅĞ¶ÏÊÇ·ñÎªÒ»¸öjson¸ñÊ½µÄÊı¾İ
-	//Èç¹ûÊÇ·ñjson¸ñÊ½Êı¾İ
-	if (pJsonRoot != NULL) {
 
-		//´®¿Ú´òÓ¡Êı¾İ
-//		char *s = cJSON_Print(pJsonRoot);
-//		os_printf("pJsonRoot: %s\r\n", s);
-//		cJSON_free((void *) s);
-
-//½âÎödevice report
-		os_printf("start json:\r\n");
-		cJSON *p_cmd = cJSON_GetObjectItem(pJsonRoot, "cmd");
-		if (p_cmd && cJSON_IsString(p_cmd) && os_strcmp(p_cmd->valuestring, "device report") == 0) {
-
-			os_printf("device report\r\n");
-			cJSON *pRoot = cJSON_CreateObject();
-			cJSON_AddStringToObject(pRoot, "name", user_config.name);
-			cJSON_AddStringToObject(pRoot, "ip", strIP);
-			cJSON_AddStringToObject(pRoot, "mac", strMac);
-			cJSON_AddNumberToObject(pRoot, "type", TYPE);
-			cJSON_AddStringToObject(pRoot, "type_name", TYPE_NAME);
-			char *s = cJSON_Print(pRoot);
-			os_printf("pRoot: %s\r\n", s);
-
-			user_send(udp_flag, s, 0);
-
-			cJSON_free((void *) s);
-			cJSON_Delete(pRoot);
-		}
-
-		//½âÎö
-		cJSON *p_name = cJSON_GetObjectItem(pJsonRoot, "name");
-		cJSON *p_mac = cJSON_GetObjectItem(pJsonRoot, "mac");
-
-		//
-		if ((p_name && cJSON_IsString(p_name) && os_strcmp(p_name->valuestring, user_config.name) == 0) //name
-		|| (p_mac && cJSON_IsString(p_mac) && os_strcmp(p_mac->valuestring, strMac) == 0)	//mac
-				) {
-
-			cJSON *json_send = cJSON_CreateObject();
-			cJSON_AddStringToObject(json_send, "mac", strMac);
-
-			//½âÎö°æ±¾
-			cJSON *p_version = cJSON_GetObjectItem(pJsonRoot, "version");
-			if (p_version) {
-				cJSON_AddStringToObject(json_send, "version", VERSION);
-			}
-
-			//·µ»Øwifi ssid
-			cJSON *p_ssid = cJSON_GetObjectItem(pJsonRoot, "ssid");
-			if (p_ssid) {
-				struct station_config ssidGet;
-				if (wifi_station_get_config_default(&ssidGet)) {
-					cJSON_AddStringToObject(json_send, "ssid", ssidGet.ssid);
-				} else {
-					cJSON_AddStringToObject(json_send, "ssid", "get wifi_ssid fail");
-				}
-			}
-
-			//½âÎö½¥±ä
-			cJSON *p_gradient = cJSON_GetObjectItem(pJsonRoot, "gradient");
-			if (cJSON_IsNumber(p_gradient) && p_gradient->valueint == 1) {
-				gradient = 1;
-			}
-
-			//½âÎöHSLÑÕÉ«
-			cJSON *p_hsl = cJSON_GetObjectItem(pJsonRoot, "hsl");
-			if (p_hsl && cJSON_IsArray(p_hsl) && cJSON_GetArraySize(p_hsl) == 4) {
-				cJSON *p_hsl_h = cJSON_GetArrayItem(p_hsl, 0);
-				cJSON *p_hsl_s = cJSON_GetArrayItem(p_hsl, 1);
-				cJSON *p_hsl_l = cJSON_GetArrayItem(p_hsl, 2);
-				cJSON *p_hsl_w = cJSON_GetArrayItem(p_hsl, 3);
-				if (cJSON_IsNumber(p_hsl_h) && cJSON_IsNumber(p_hsl_s) && cJSON_IsNumber(p_hsl_l) && cJSON_IsNumber(p_hsl_w)) {
-					os_printf("hsl:%d,%d,%d,%d\n", p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, p_hsl_w->valueint);
-
-					HSL2RGB(p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, &r_now, &g_now, &b_now);
-					w_now = p_hsl_w->valueint;
-					user_led_set(r_now, g_now, b_now, w_now, gradient);
-				}
-			}
-			//½âÎöRGBÑÕÉ«
-			cJSON *p_rgb = cJSON_GetObjectItem(pJsonRoot, "rgb");
-			if (p_rgb && cJSON_IsArray(p_rgb) && cJSON_GetArraySize(p_rgb) == 4) {
-				cJSON *p_rgb_r = cJSON_GetArrayItem(p_rgb, 0);
-				cJSON *p_rgb_g = cJSON_GetArrayItem(p_rgb, 1);
-				cJSON *p_rgb_b = cJSON_GetArrayItem(p_rgb, 2);
-				cJSON *p_rgb_w = cJSON_GetArrayItem(p_rgb, 3);
-				if (cJSON_IsNumber(p_rgb_r) && cJSON_IsNumber(p_rgb_g) && cJSON_IsNumber(p_rgb_b) && cJSON_IsNumber(p_rgb_w)) {
-					os_printf("rgb:%d,%d,%d,%d\n", p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint);
-
-					user_led_set(p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint, gradient);
-				}
-			}
-
-			//ÉèÖÃ¿ª¹Ø
-			cJSON *p_on = cJSON_GetObjectItem(pJsonRoot, "on");
-			if (p_on && cJSON_IsNumber(p_on)) {
-				plug_retained = 1;
-				if (p_on->valueint == 0)
-					user_led_set(0, 0, 0, 0, gradient);
-				else {
-					user_led_set(r, g, b, w, gradient);
-				}
-			}
-
-			if (p_hsl || p_rgb || p_on) {
-
-				char json_temp_str[17] = { 0 };
-
-				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_now, g_now, b_now, w_now);
-				cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
-				uint16_t h_val;
-				uint8_t s_val, l_val;
-				RGB2HSL(r_now, g_now, b_now, &h_val, &s_val, &l_val);
-				os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w_now);
-				cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
-
-				plug_retained = 1;
-				cJSON_AddNumberToObject(json_send, "on", on);
-				if (p_gradient)
-					cJSON_AddNumberToObject(json_send, "gradient", gradient);
-			}
-
-			//½âÎörgb hsl²âÊÔ
-			cJSON *p_testcolor = cJSON_GetObjectItem(pJsonRoot, "test");
-			if (p_testcolor && cJSON_IsArray(p_testcolor) && cJSON_GetArraySize(p_testcolor) == 4) {
-//				cJSON *p_testcolor_r = cJSON_GetArrayItem(p_testcolor, 0);
-//				cJSON *p_testcolor_g = cJSON_GetArrayItem(p_testcolor, 1);
-//				cJSON *p_testcolor_b = cJSON_GetArrayItem(p_testcolor, 2);
-//				cJSON *p_testcolor_w = cJSON_GetArrayItem(p_testcolor, 3);
-
-			}
-
-			cJSON *p_setting = cJSON_GetObjectItem(pJsonRoot, "setting");
-			if (p_setting) {
-
-				//½âÎöota
-				uint8_t userBin = system_upgrade_userbin_check();
-				cJSON *p_ota1 = cJSON_GetObjectItem(p_setting, "ota1");
-				cJSON *p_ota2 = cJSON_GetObjectItem(p_setting, "ota2");
-				if (userBin == UPGRADE_FW_BIN2) {
-					if (p_ota1 && cJSON_IsString(p_ota1)) {
-						if (cJSON_IsString(p_ota1))
-							user_ota_start(p_ota1->valuestring);
-					}
-				} else {
-					if (p_ota2 && cJSON_IsString(p_ota2)) {
-						if (cJSON_IsString(p_ota2))
-							user_ota_start(p_ota2->valuestring);
-					}
-				}
-
-				//ÉèÖÃÉè±¸Ãû³Æ
-				cJSON *p_setting_name = cJSON_GetObjectItem(p_setting, "name");
-				if (p_setting_name && cJSON_IsString(p_setting_name)) {
-					update_user_config_flag = true;
-					os_sprintf(user_config.name, p_setting_name->valuestring);
-				}
-
-				//ÉèÖÃwifi ssid
-				cJSON *p_setting_wifi_ssid = cJSON_GetObjectItem(p_setting, "wifi_ssid");
-				cJSON *p_setting_wifi_password = cJSON_GetObjectItem(p_setting, "wifi_password");
-				if (p_setting_wifi_ssid && cJSON_IsString(p_setting_wifi_ssid) && p_setting_wifi_password
-						&& cJSON_IsString(p_setting_wifi_password)) {
-
-					user_wifi_set(p_setting_wifi_ssid->valuestring, p_setting_wifi_password->valuestring);
-//					struct station_config stationConf;
-//					stationConf.bssid_set = 0; //need not check MAC address of AP
-//					os_sprintf(stationConf.ssid, p_setting_wifi_ssid->valuestring);
-//					os_sprintf(stationConf.password, p_setting_wifi_password->valuestring);
-//					wifi_station_set_config(&stationConf);
-				}
-
-				//ÉèÖÃmqtt ip
-				cJSON *p_mqtt_ip = cJSON_GetObjectItem(p_setting, "mqtt_uri");
-				if (p_mqtt_ip && cJSON_IsString(p_mqtt_ip)) {
-					update_user_config_flag = true;
-					os_sprintf(user_config.mqtt_ip, p_mqtt_ip->valuestring);
-				}
-
-				//ÉèÖÃmqtt port
-				cJSON *p_mqtt_port = cJSON_GetObjectItem(p_setting, "mqtt_port");
-				if (p_mqtt_port && cJSON_IsNumber(p_mqtt_port)) {
-					update_user_config_flag = true;
-					user_config.mqtt_port = p_mqtt_port->valueint;
-				}
-
-				//ÉèÖÃmqtt user
-				cJSON *p_mqtt_user = cJSON_GetObjectItem(p_setting, "mqtt_user");
-				if (p_mqtt_user && cJSON_IsString(p_mqtt_user)) {
-					update_user_config_flag = true;
-					os_sprintf(user_config.mqtt_user, p_mqtt_user->valuestring);
-				}
-
-				//ÉèÖÃmqtt password
-				cJSON *p_mqtt_password = cJSON_GetObjectItem(p_setting, "mqtt_password");
-				if (p_mqtt_password && cJSON_IsString(p_mqtt_password)) {
-					update_user_config_flag = true;
-					os_sprintf(user_config.mqtt_password, p_mqtt_password->valuestring);
-				}
-
-				//¿ªÊ¼·µ»ØÊı¾İ
-				cJSON *json_setting_send = cJSON_CreateObject();
-				//·µ»ØÉè±¸ota
-				if (p_ota1)
-					cJSON_AddStringToObject(json_setting_send, "ota1", p_ota1->valuestring);
-				if (p_ota2)
-					cJSON_AddStringToObject(json_setting_send, "ota2", p_ota2->valuestring);
-				//ÉèÖÃÉè±¸Ãû³Æ
-				if (p_setting_name)
-					cJSON_AddStringToObject(json_setting_send, "name", user_config.name);
-
-				//ÉèÖÃÉè±¸wifi
-				if (p_setting_wifi_ssid || p_setting_wifi_password) {
-					struct station_config configGet;
-					if (wifi_station_get_config_default(&configGet)) {
-						cJSON_AddStringToObject(json_setting_send, "wifi_ssid", configGet.ssid);
-						cJSON_AddStringToObject(json_setting_send, "wifi_password", configGet.password);
-					} else {
-						cJSON_AddStringToObject(json_setting_send, "wifi_ssid", "get wifi_ssid fail");
-						cJSON_AddStringToObject(json_setting_send, "wifi_password", "get wifi_password fail");
-					}
-				}
-
-				//ÉèÖÃmqtt ip
-				if (p_mqtt_ip)
-					cJSON_AddStringToObject(json_setting_send, "mqtt_uri", user_config.mqtt_ip);
-
-				//ÉèÖÃmqtt port
-				if (p_mqtt_port)
-					cJSON_AddNumberToObject(json_setting_send, "mqtt_port", user_config.mqtt_port);
-
-				//ÉèÖÃmqtt user
-				if (p_mqtt_user)
-					cJSON_AddStringToObject(json_setting_send, "mqtt_user", user_config.mqtt_user);
-
-				//ÉèÖÃmqtt password
-				if (p_mqtt_password)
-					cJSON_AddStringToObject(json_setting_send, "mqtt_password", user_config.mqtt_password);
-
-				cJSON_AddItemToObject(json_send, "setting", json_setting_send);
-
-				if ((p_mqtt_ip && cJSON_IsString(p_mqtt_ip) && p_mqtt_port && cJSON_IsNumber(p_mqtt_port) && p_mqtt_user
-						&& cJSON_IsString(p_mqtt_user) && p_mqtt_password && cJSON_IsString(p_mqtt_password) && !user_mqtt_is_connect())) {
-					user_function_restart(200);
-				}
-			}
-
-			//½âÎö¶¨Ê±ÈÎÎñ-----------------------------------------------------------------
-//			for (i = 0; i < TIME_TASK_NUM; i++) {
-//				if (json_task_analysis(i, pJsonRoot, json_send))
-//					update_user_config_flag = true;
-//			}
-
-//			cJSON_AddNumberToObject(json_send, "on", user_config.on);
-			cJSON_AddStringToObject(json_send, "name", user_config.name);
-
-			char *json_str = cJSON_Print(json_send);
-			os_printf("json_send: %s\r\n", json_str);
-			user_send(udp_flag, json_str, plug_retained);
-			cJSON_free((void *) json_str);
-
-			if (update_user_config_flag) {
-				user_setting_set_config();
-				update_user_config_flag = false;
-			}
-
-			cJSON_Delete(json_send);
-		}
-
-	} else {
-		os_printf("this is not a json data:\r\n%s\r\n", jsonRoot);
-	}
-
-	cJSON_Delete(pJsonRoot);
-//	os_printf("get freeHeap2: %d \n\n", system_get_free_heap_size());
-}
-
-/*
- *½âÎö´¦Àí¶¨Ê±ÈÎÎñjson
- *x:²å×ù±àºÅ y:ÈÎÎñ±àºÅ
+/**
+ * å‡½  æ•°  å: _json_timer_fun
+ * å‡½æ•°è¯´æ˜: jsonå¤„ç†å®šæ™‚å™¨å›è°ƒå‡½æ•°,å½“éœ€è¦ä¿å­˜flashæ—¶,å»¶æ—¶2ç§’å†ä¿å­˜æ•°æ®
+ * å‚        æ•°: æ— 
+ * è¿”        å›: æ— 
  */
-bool ICACHE_FLASH_ATTR
-json_task_analysis(unsigned char x, cJSON * pJsonRoot, cJSON * pJsonSend) {
-	if (!pJsonRoot)
-		return false;
-	bool return_flag = false;
-
-	char plug_task_str[] = "task_X";
-	plug_task_str[5] = x + '0';
-
-	cJSON *p_plug_task = cJSON_GetObjectItem(pJsonRoot, plug_task_str);
-	if (!p_plug_task)
-		return false;
-
-	cJSON *json_plug_task_send = cJSON_CreateObject();
-
-	cJSON *p_plug_task_hour = cJSON_GetObjectItem(p_plug_task, "hour");
-	cJSON *p_plug_task_minute = cJSON_GetObjectItem(p_plug_task, "minute");
-	cJSON *p_plug_task_repeat = cJSON_GetObjectItem(p_plug_task, "repeat");
-	cJSON *p_plug_task_action = cJSON_GetObjectItem(p_plug_task, "action");
-	cJSON *p_plug_task_on = cJSON_GetObjectItem(p_plug_task, "on");
-
-	if (p_plug_task_hour && p_plug_task_minute && p_plug_task_repeat && p_plug_task_action && p_plug_task_on) {
-
-		if (cJSON_IsNumber(p_plug_task_hour) && cJSON_IsNumber(p_plug_task_minute) && cJSON_IsNumber(p_plug_task_repeat)
-				&& cJSON_IsNumber(p_plug_task_action) && cJSON_IsNumber(p_plug_task_on)) {
-			return_flag = true;
-			user_config.task[x].hour = p_plug_task_hour->valueint;
-			user_config.task[x].minute = p_plug_task_minute->valueint;
-			user_config.task[x].repeat = p_plug_task_repeat->valueint;
-			user_config.task[x].action = p_plug_task_action->valueint;
-			user_config.task[x].on = p_plug_task_on->valueint;
-		}
-
-	}
-	cJSON_AddNumberToObject(json_plug_task_send, "hour", user_config.task[x].hour);
-	cJSON_AddNumberToObject(json_plug_task_send, "minute", user_config.task[x].minute);
-	cJSON_AddNumberToObject(json_plug_task_send, "repeat", user_config.task[x].repeat);
-	cJSON_AddNumberToObject(json_plug_task_send, "action", user_config.task[x].action);
-	cJSON_AddNumberToObject(json_plug_task_send, "on", user_config.task[x].on);
-
-	cJSON_AddItemToObject(pJsonSend, plug_task_str, json_plug_task_send);
-	return return_flag;
+static os_timer_t _timer_json;
+static void _json_timer_fun(void *arg)
+{
+    zlib_setting_save_config(&user_config, sizeof(user_config_t));
 }
 
+/**
+ * å‡½  æ•°  å: _json_deal_cb
+ * å‡½æ•°è¯´æ˜: jsonæ•°æ®å¤„ç†åˆå§‹åŒ–å›è°ƒå‡½æ•°,åœ¨æ­¤å‡½æ•°ä¸­å¤„ç†json
+ * å‚        æ•°: æ— 
+ * è¿”        å›: æ— 
+ */
+static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON * pJsonRoot, void *p)
+{
+    bool update_user_config_flag = false;   //æ ‡å¿—ä½,è®°å½•æœ€åæ˜¯å¦éœ€è¦æ›´æ–°å‚¨å­˜çš„æ•°æ®
+    uint8_t retained = 0;
+    //è§£ædevice report
+    cJSON *p_cmd = cJSON_GetObjectItem(pJsonRoot, "cmd");
+    if(p_cmd && cJSON_IsString(p_cmd) && os_strcmp(p_cmd->valuestring, "device report") == 0)
+    {
+
+        os_printf("device report\r\n");
+        cJSON *pRoot = cJSON_CreateObject();
+        cJSON_AddStringToObject(pRoot, "name", user_config.name);
+        cJSON_AddStringToObject(pRoot, "ip", zlib_wifi_get_ip_str());
+        cJSON_AddStringToObject(pRoot, "mac", zlib_wifi_get_mac_str());
+        cJSON_AddNumberToObject(pRoot, "type", TYPE);
+        cJSON_AddStringToObject(pRoot, "type_name", TYPE_NAME);
+
+        char json_temp_str[64] = { 0 };
+        os_sprintf(json_temp_str, "[\"%s\",\"%s\",\"%s\",\"%s\"]", user_mqtt_get_state_topic(),
+                user_mqtt_get_set_topic(), user_mqtt_get_sensor_topic(), user_mqtt_get_will_topic());
+        cJSON_AddItemToObject(pRoot, "topic", cJSON_Parse(json_temp_str));
+
+        char *s = cJSON_Print(pRoot);
+        os_printf("pRoot: [%s]\r\n", s);
+
+        zlib_fun_wifi_send(arg, type, user_mqtt_get_state_topic(), s, 1, 0);
+
+        cJSON_free((void *) s);
+        cJSON_Delete(pRoot);
+        return;
+    }
+
+    //è§£æ
+    cJSON *p_name = cJSON_GetObjectItem(pJsonRoot, "name");
+    cJSON *p_mac = cJSON_GetObjectItem(pJsonRoot, "mac");
+
+    if((p_mac && cJSON_IsString(p_mac) && os_strcmp(p_mac->valuestring, zlib_wifi_get_mac_str()) != 0)
+            && (p_mac && cJSON_IsString(p_mac) && os_strcmp(p_mac->valuestring, strlwr(TYPE_NAME)) != 0)
+            && (type != WIFI_COMM_TYPE_HTTP && type != WIFI_COMM_TYPE_TCP)) return;
+
+    cJSON *json_send = cJSON_CreateObject();
+    //macå­—æ®µ
+    cJSON_AddStringToObject(json_send, "mac", zlib_wifi_get_mac_str());
+
+    //versionç‰ˆæœ¬
+    cJSON *p_version = cJSON_GetObjectItem(pJsonRoot, "version");
+    if(p_version)
+    {
+        cJSON_AddStringToObject(json_send, "version", VERSION);
+    }
+    //é‡å¯å‘½ä»¤
+    if(p_cmd && cJSON_IsString(p_cmd) && strcmp(p_cmd->valuestring, "restart") == 0)
+    {
+        os_printf("cmd:restart");
+        zlib_reboot_delay(2000);
+        cJSON_AddStringToObject(json_send, "cmd", "restart");
+    }
+
+    //è¿”å›wifi ssidåŠrssi
+    cJSON *p_ssid = cJSON_GetObjectItem(pJsonRoot, "ssid");
+    if(p_ssid)
+    {
+        struct station_config ssidGet;
+        if(wifi_station_get_config(&ssidGet))
+        {
+            cJSON_AddStringToObject(json_send, "ssid", ssidGet.ssid);
+            cJSON_AddNumberToObject(json_send, "rssi", ssidGet.threshold.rssi);
+        }
+        else
+        {
+            cJSON_AddStringToObject(json_send, "ssid", "get wifi_ssid fail");
+        }
+    }
+
+    cJSON *p_setting = cJSON_GetObjectItem(pJsonRoot, "setting");
+    if(p_setting)
+    {
+        //è§£æota
+        uint8_t userBin = system_upgrade_userbin_check();
+        cJSON *p_ota1 = cJSON_GetObjectItem(p_setting, "ota1");
+        cJSON *p_ota2 = cJSON_GetObjectItem(p_setting, "ota2");
+        if(p_ota1 && userBin == UPGRADE_FW_BIN2 && cJSON_IsString(p_ota1))
+        {
+            zlib_ota_start(p_ota1->valuestring);
+        }
+        else if(p_ota2 && userBin == UPGRADE_FW_BIN1 && cJSON_IsString(p_ota2))
+        {
+            zlib_ota_start(p_ota2->valuestring);
+        }
+
+        //è®¾ç½®è®¾å¤‡åç§°
+        cJSON *p_setting_name = cJSON_GetObjectItem(p_setting, "name");
+        if(p_setting_name && cJSON_IsString(p_setting_name))
+        {
+            update_user_config_flag = true;
+            os_sprintf(user_config.name, p_setting_name->valuestring);
+        }
+
+        //è®¾ç½®wifi ssid
+        cJSON *p_setting_wifi_ssid = cJSON_GetObjectItem(p_setting, "wifi_ssid");
+        cJSON *p_setting_wifi_password = cJSON_GetObjectItem(p_setting, "wifi_password");
+        if(p_setting_wifi_ssid && cJSON_IsString(p_setting_wifi_ssid) && p_setting_wifi_password
+                && cJSON_IsString(p_setting_wifi_password))
+        {
+            zlib_wifi_set_ssid_delay(p_setting_wifi_ssid->valuestring, p_setting_wifi_password->valuestring, 1000);
+        }
+
+        //è®¾ç½®mqtt ip
+        cJSON *p_mqtt_ip = cJSON_GetObjectItem(p_setting, "mqtt_uri");
+        if(p_mqtt_ip && cJSON_IsString(p_mqtt_ip))
+        {
+            update_user_config_flag = true;
+            os_sprintf(user_config.mqtt_ip, p_mqtt_ip->valuestring);
+        }
+
+        //è®¾ç½®mqtt port
+        cJSON *p_mqtt_port = cJSON_GetObjectItem(p_setting, "mqtt_port");
+        if(p_mqtt_port && cJSON_IsNumber(p_mqtt_port))
+        {
+            update_user_config_flag = true;
+            user_config.mqtt_port = p_mqtt_port->valueint;
+        }
+
+        //è®¾ç½®mqtt user
+        cJSON *p_mqtt_user = cJSON_GetObjectItem(p_setting, "mqtt_user");
+        if(p_mqtt_user && cJSON_IsString(p_mqtt_user))
+        {
+            update_user_config_flag = true;
+            os_sprintf(user_config.mqtt_user, p_mqtt_user->valuestring);
+        }
+
+        //è®¾ç½®mqtt password
+        cJSON *p_mqtt_password = cJSON_GetObjectItem(p_setting, "mqtt_password");
+        if(p_mqtt_password && cJSON_IsString(p_mqtt_password))
+        {
+            update_user_config_flag = true;
+            os_sprintf(user_config.mqtt_password, p_mqtt_password->valuestring);
+        }
+
+        //é…ç½®settingè¿”å›æ•°æ®
+        cJSON *json_setting_send = cJSON_CreateObject();
+        cJSON *p_userbin = cJSON_GetObjectItem(p_setting, "userbin");
+        if(p_userbin || p_ota1 || p_ota2)
+        {
+            cJSON_AddNumberToObject(json_setting_send, "userbin", userBin);
+        }
+        //è¿”å›è®¾å¤‡ota
+        if(p_ota1) cJSON_AddStringToObject(json_setting_send, "ota1", p_ota1->valuestring);
+        if(p_ota2) cJSON_AddStringToObject(json_setting_send, "ota2", p_ota2->valuestring);
+
+        //è®¾ç½®è®¾å¤‡åç§°
+        if(p_setting_name)
+        cJSON_AddStringToObject(json_setting_send, "name", user_config.name);
+
+        //è®¾ç½®è®¾å¤‡wifi
+        if(p_setting_wifi_ssid || p_setting_wifi_password)
+        {
+            cJSON_AddStringToObject(json_setting_send, "wifi_ssid", p_setting_wifi_ssid->valuestring);
+            cJSON_AddStringToObject(json_setting_send, "wifi_password", p_setting_wifi_password->valuestring);
+        }
+
+        //è®¾ç½®mqtt ip
+        if(p_mqtt_ip)
+        cJSON_AddStringToObject(json_setting_send, "mqtt_uri", user_config.mqtt_ip);
+
+        //è®¾ç½®mqtt port
+        if(p_mqtt_port)
+        cJSON_AddNumberToObject(json_setting_send, "mqtt_port", user_config.mqtt_port);
+
+        //è®¾ç½®mqtt user
+        if(p_mqtt_user)
+        cJSON_AddStringToObject(json_setting_send, "mqtt_user", user_config.mqtt_user);
+
+        //è®¾ç½®mqtt password
+        if(p_mqtt_password)
+        cJSON_AddStringToObject(json_setting_send, "mqtt_password", user_config.mqtt_password);
+
+        cJSON_AddItemToObject(json_send, "setting", json_setting_send);
+
+        if(p_mqtt_ip && cJSON_IsString(p_mqtt_ip) && p_mqtt_port && cJSON_IsNumber(p_mqtt_port) && p_mqtt_user
+                && cJSON_IsString(p_mqtt_user) && p_mqtt_password && cJSON_IsString(p_mqtt_password)
+                && !zlib_mqtt_is_connected())
+        {
+            zlib_reboot_delay(500);
+        }
+    }
+
+    cJSON_AddStringToObject(json_send, "name", user_config.name);
+
+    char *json_str = cJSON_Print(json_send);
+    os_printf("json_send: %s\r\n", json_str);
+    zlib_fun_wifi_send(arg, type, user_mqtt_get_state_topic(), json_str, 1, retained);
+    cJSON_free((void *) json_str);
+    cJSON_Delete(json_send);
+    if(update_user_config_flag)
+    {
+        os_timer_disarm(&_timer_json);
+        os_timer_setfn(&_timer_json, (os_timer_func_t *) _json_timer_fun, NULL);
+        os_timer_arm(&_timer_json, 2000, false); //2000æ¯«ç§’åä¿å­˜
+
+        //zlib_setting_save_config(&user_config, sizeof(user_config_t));
+        update_user_config_flag = false;
+    }
+}
+/**
+ * å‡½  æ•°  å: user_json_init
+ * å‡½æ•°è¯´æ˜: jsonæ•°æ®å¤„ç†åˆå§‹åŒ–
+ * å‚        æ•°: æ— 
+ * è¿”        å›: æ— 
+ */
+void ICACHE_FLASH_ATTR user_json_init(void)
+{
+
+    zlib_json_init(_json_deal_cb);
+    os_printf("user json init\n");
+}
