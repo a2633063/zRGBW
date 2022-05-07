@@ -60,6 +60,7 @@ typedef struct
     uint8_t mqtt_password[SETTING_MQTT_STRING_LENGTH_MAX];     //mqtt service user
     uint8_t on;    //预留,未使用
     uint8_t gpio[5];        //rgbw  预留rgbww
+    uint16_t auto_off;  //每次打开后自动关闭时间,单位s. 为0时关闭此功能
     user_time_task_config_t task[TIME_TASK_NUM];
 } user_config_t;
 

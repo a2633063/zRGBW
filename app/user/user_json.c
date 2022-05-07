@@ -9,6 +9,12 @@
 #include "user_led.h"
 #include "user_mqtt.h"
 
+static os_timer_t _timer_auto_off;
+static void _json_timer_auto_off_fun(uint8 * gradient)
+{
+    os_printf("auto off, gradient:%d",*gradient);
+    user_led_set(0,0,0,0,*gradient);
+}
 /**
  * 函  数  名: _json_timer_fun
  * 函数说明: json处理定時器回调函数,当需要保存flash时,延时2秒再保存数据
@@ -31,7 +37,9 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
 {
     bool update_user_config_flag = false;   //标志位,记录最后是否需要更新储存的数据
     uint8_t retained = 0;
-    uint8_t i, gradient = 0;
+    uint8_t i;
+    static uint8_t gradient = 0;
+    gradient = 0;
     //解析device report
     cJSON *p_cmd = cJSON_GetObjectItem(pJsonRoot, "cmd");
     if(p_cmd && cJSON_IsString(p_cmd) && os_strcmp(p_cmd->valuestring, "device report") == 0)
@@ -143,6 +151,13 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         cJSON_AddItemToObject(json_send, "gpio", cJSON_Parse(json_temp_str));
     }
 
+    //设置自动关闭功能
+    cJSON *p_auto_off = cJSON_GetObjectItem(pJsonRoot, "auto_off");
+    if(p_auto_off)
+    {
+        if(cJSON_IsNumber(p_auto_off)) user_config.auto_off = p_auto_off->valueint;
+        cJSON_AddNumberToObject(json_send, "auto_off", p_auto_off->valueint);
+    }
     //解析渐变
     cJSON *p_gradient = cJSON_GetObjectItem(pJsonRoot, "gradient");
     if(p_gradient && cJSON_IsNumber(p_gradient) && p_gradient->valueint == 1)
@@ -198,7 +213,6 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
 
     if(p_hsl || p_rgb || p_on)
     {
-
         char json_temp_str[17] = { 0 };
 
         os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_now, g_now, b_now, w_now);
@@ -213,8 +227,27 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         cJSON_AddNumberToObject(json_send, "on", on);
         if(p_gradient)
         cJSON_AddNumberToObject(json_send, "gradient", gradient);
-    }
 
+        //解析是否有临时自动关闭
+        os_timer_disarm(&_timer_auto_off);
+        if(on != 0)
+        {   //只有在开灯时才处理此命令
+            cJSON *p_auto_off_once = cJSON_GetObjectItem(pJsonRoot, "auto_off_once");
+            if(p_auto_off_once)
+            {
+                if(cJSON_IsNumber(p_auto_off_once) && p_auto_off_once->valueint > 0)
+                {
+                    os_timer_setfn(&_timer_auto_off, (os_timer_func_t *) _json_timer_auto_off_fun, &gradient);
+                    os_timer_arm(&_timer_auto_off, (uint32_t )p_auto_off_once->valueint * 1000, false);
+                }
+            }
+            else if(user_config.auto_off > 0)
+            {
+                os_timer_setfn(&_timer_auto_off, (os_timer_func_t *) _json_timer_auto_off_fun, &gradient);
+                os_timer_arm(&_timer_auto_off, (uint32_t )user_config.auto_off * 1000, false);
+            }
+        }
+    }
     //返回wifi ssid及rssi
     cJSON *p_ssid = cJSON_GetObjectItem(pJsonRoot, "ssid");
     if(p_ssid)
@@ -239,6 +272,7 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         pwm_start();
         cJSON_AddNumberToObject(json_send, "test", p_test->valueint);
     }
+
     cJSON *p_setting = cJSON_GetObjectItem(pJsonRoot, "setting");
     if(p_setting)
     {
