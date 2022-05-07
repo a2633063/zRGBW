@@ -71,11 +71,12 @@ user_setting_init(void)
             task->hour = 12;
             task->minute = 0;
             task->repeat = 0x7f;
-            task->action = 0;
+            //task->action = 0xff;
             task->r = 0;
             task->g = 0;
             task->b = 0;
             task->w = 0;
+            task->gradient = 1;
         }
         os_printf("config version error.Restore default settings\n");
         zlib_setting_save_flash(SETTING_SAVE_ADDR, &user_config, sizeof(user_config_t));
@@ -83,7 +84,7 @@ user_setting_init(void)
 
     os_printf("setting:\n");
     os_printf("\tdevice name:%s\n", user_config.name);
-    os_printf("\auto_off:%d\n", user_config.auto_off);
+    os_printf("\tauto_off:%d\n", user_config.auto_off);
     os_printf("\tgpio:[%d,%d,%d,%d]\n", user_config.gpio[0], user_config.gpio[1], user_config.gpio[2],
             user_config.gpio[3]);
 

@@ -19,13 +19,6 @@ static char topic_set[MAX_MQTT_TOPIC_SIZE];
 static char topic_sensor[MAX_MQTT_TOPIC_SIZE];
 static char willtopic[MAX_MQTT_TOPIC_SIZE];
 
-bool ICACHE_FLASH_ATTR _user_mqtt_received_cb(uint32_t *arg, const char* topic, uint32_t topic_len, const char *data,
-        uint32_t data_len)
-{
-    if(os_strlen(data) > 0) zlib_mqtt_send_message(topic, "", 1, 1);
-    return true;
-}
-
 /**
  * 函  数  名: user_mqtt_init
  * 函数说明: mqtt初始化
@@ -72,7 +65,6 @@ void ICACHE_FLASH_ATTR user_mqtt_init(void)
 
     zlib_mqtt_set_online_message(message, sizeof(message) / sizeof(zlib_mqtt_message_info_t));
     zlib_mqtt_subscribe(mqtt_topic, sizeof(mqtt_topic) / sizeof(zlib_mqtt_topic_info_t));
-    zlib_mqtt_set_received_callback(_user_mqtt_received_cb); //是否清楚set主题的retain数据
     os_printf("user mqtt init\n");
 }
 

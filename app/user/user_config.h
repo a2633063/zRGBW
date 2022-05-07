@@ -21,7 +21,7 @@
 #define ZLIB_SETTING_SAVE_ADDR  (SETTING_SAVE_ADDR) 	//设置储存地址
 
 
-#define VERSION "v0.0.1"
+#define VERSION "v0.1.0"
 
 #define TYPE 8
 
@@ -42,11 +42,12 @@ typedef struct {
     int8_t minute;    //分钟
     uint8_t repeat; //bit7:一次   bit6-0:周日-周一
     int8_t on;    //定时任务开关
-    int8_t action;    //开关动作
+    int8_t action;    //开关动作,未使用,直接使用rgbw作为开关状态
     uint8_t r;    //r
     uint8_t g;    //g
     uint8_t b;    //b
     uint8_t w;    //w
+    uint8_t gradient;   //渐变效果
 } user_time_task_config_t;
 
 //用户保存参数结构体

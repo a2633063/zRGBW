@@ -9,11 +9,13 @@
 #include "user_led.h"
 #include "user_mqtt.h"
 
+bool json_task_analysis(unsigned char x, cJSON * pJsonRoot, cJSON * pJsonSend);
+
 static os_timer_t _timer_auto_off;
 static void _json_timer_auto_off_fun(uint8 * gradient)
 {
-    os_printf("auto off, gradient:%d",*gradient);
-    user_led_set(0,0,0,0,*gradient);
+    os_printf("auto off, gradient:%d", *gradient);
+    user_led_set(0, 0, 0, 0, *gradient);
 }
 /**
  * 函  数  名: _json_timer_fun
@@ -33,7 +35,7 @@ static void _json_timer_fun(void *arg)
  * 参        数: 无
  * 返        回: 无
  */
-static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON * pJsonRoot, void *p)
+void ICACHE_FLASH_ATTR user_json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON * pJsonRoot, void *p)
 {
     bool update_user_config_flag = false;   //标志位,记录最后是否需要更新储存的数据
     uint8_t retained = 0;
@@ -213,7 +215,7 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
 
     if(p_hsl || p_rgb || p_on)
     {
-        char json_temp_str[17] = { 0 };
+        char json_temp_str[24] = { 0 };
 
         os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_now, g_now, b_now, w_now);
         cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
@@ -239,12 +241,14 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
                 {
                     os_timer_setfn(&_timer_auto_off, (os_timer_func_t *) _json_timer_auto_off_fun, &gradient);
                     os_timer_arm(&_timer_auto_off, (uint32_t )p_auto_off_once->valueint * 1000, false);
+                    cJSON_AddNumberToObject(json_send, "auto_off_time", p_auto_off_once->valueint);
                 }
             }
             else if(user_config.auto_off > 0)
             {
                 os_timer_setfn(&_timer_auto_off, (os_timer_func_t *) _json_timer_auto_off_fun, &gradient);
                 os_timer_arm(&_timer_auto_off, (uint32_t )user_config.auto_off * 1000, false);
+                cJSON_AddNumberToObject(json_send, "auto_off_time", user_config.auto_off);
             }
         }
     }
@@ -387,6 +391,11 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
     }
 
     cJSON_AddStringToObject(json_send, "name", user_config.name);
+    //解析定时任务-----------------------------------------------------------------
+    for (i = 0; i < TIME_TASK_NUM; i++)
+    {
+        if(json_task_analysis(i, pJsonRoot, json_send)) update_user_config_flag = true;
+    }
 
     char *json_str = cJSON_Print(json_send);
     os_printf("json_send: %s\r\n", json_str);
@@ -403,6 +412,116 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         update_user_config_flag = false;
     }
 }
+
+/**
+ * 函  数  名: json_task_analysis
+ * 函数说明: 解析处理定时任务json
+ * 参        数: x:任务编号
+ * 返        回:
+ */
+bool ICACHE_FLASH_ATTR
+json_task_analysis(unsigned char x, cJSON * pJsonRoot, cJSON * pJsonSend)
+{
+    if(!pJsonRoot) return false;
+
+    uint8_t gradient = 0;
+    bool return_flag = false;
+
+    char plug_task_str[] = "task_X";
+    plug_task_str[5] = x + '0';
+
+    cJSON *p_plug_task = cJSON_GetObjectItem(pJsonRoot, plug_task_str);
+    if(!p_plug_task) return false;
+
+    cJSON *json_plug_task_send = cJSON_CreateObject();
+
+    cJSON *p_plug_task_hour = cJSON_GetObjectItem(p_plug_task, "hour");
+    cJSON *p_plug_task_minute = cJSON_GetObjectItem(p_plug_task, "minute");
+    cJSON *p_plug_task_repeat = cJSON_GetObjectItem(p_plug_task, "repeat");
+    cJSON *p_plug_task_on = cJSON_GetObjectItem(p_plug_task, "on");
+
+    cJSON *p_plug_task_hsl = cJSON_GetObjectItem(p_plug_task, "hsl");
+    cJSON *p_plug_task_rgb = cJSON_GetObjectItem(p_plug_task, "rgb");
+
+    //解析渐变
+    cJSON *p_plug_task_gradient = cJSON_GetObjectItem(p_plug_task, "gradient");
+    if(p_plug_task_gradient && cJSON_IsNumber(p_plug_task_gradient) && p_plug_task_gradient->valueint == 1)
+    {
+        gradient = 1;
+    }
+    while (p_plug_task_hour && p_plug_task_minute && p_plug_task_repeat && p_plug_task_on
+            && (p_plug_task_hsl || p_plug_task_rgb))
+    {
+        if(!cJSON_IsNumber(p_plug_task_hour) || !cJSON_IsNumber(p_plug_task_minute)
+                || !cJSON_IsNumber(p_plug_task_repeat)) break;
+        if(!cJSON_IsNumber(p_plug_task_on)) break;
+
+        uint8_t r_task, g_task, b_task, w_task;
+        if(!p_plug_task_rgb && p_plug_task_hsl && cJSON_IsArray(p_plug_task_hsl)
+                && cJSON_GetArraySize(p_plug_task_hsl) == 4)
+        {   //当前配置为hsl
+            cJSON *p_plug_task_hsl_h = cJSON_GetArrayItem(p_plug_task_hsl, 0);
+            cJSON *p_plug_task_hsl_s = cJSON_GetArrayItem(p_plug_task_hsl, 1);
+            cJSON *p_plug_task_hsl_l = cJSON_GetArrayItem(p_plug_task_hsl, 2);
+            cJSON *p_plug_task_hsl_w = cJSON_GetArrayItem(p_plug_task_hsl, 3);
+            if(!cJSON_IsNumber(p_plug_task_hsl_h) || !cJSON_IsNumber(p_plug_task_hsl_s)
+                    || !cJSON_IsNumber(p_plug_task_hsl_l) || !cJSON_IsNumber(p_plug_task_hsl_w)) break;
+
+            HSL2RGB(p_plug_task_hsl_h->valueint, p_plug_task_hsl_s->valueint, p_plug_task_hsl_l->valueint, &r_task,
+                    &g_task, &b_task);
+            w_task = p_plug_task_hsl_w->valueint;
+        }
+        else if(!p_plug_task_hsl && p_plug_task_rgb && cJSON_IsArray(p_plug_task_rgb)
+                && cJSON_GetArraySize(p_plug_task_rgb) == 4)
+        {   //当前配置为rgb
+            cJSON *p_plug_task_rgb_r = cJSON_GetArrayItem(p_plug_task_rgb, 0);
+            cJSON *p_plug_task_rgb_g = cJSON_GetArrayItem(p_plug_task_rgb, 1);
+            cJSON *p_plug_task_rgb_b = cJSON_GetArrayItem(p_plug_task_rgb, 2);
+            cJSON *p_plug_task_rgb_w = cJSON_GetArrayItem(p_plug_task_rgb, 3);
+            if(!cJSON_IsNumber(p_plug_task_rgb_r) || !cJSON_IsNumber(p_plug_task_rgb_g)
+                    || !cJSON_IsNumber(p_plug_task_rgb_b) || !cJSON_IsNumber(p_plug_task_rgb_w)) break;
+
+            r_task = p_plug_task_rgb_r->valueint;
+            g_task = p_plug_task_rgb_g->valueint;
+            b_task = p_plug_task_rgb_b->valueint;
+            w_task = p_plug_task_rgb_w->valueint;
+        }
+        else
+            break;
+
+        return_flag = true;
+        user_config.task[x].hour = p_plug_task_hour->valueint;
+        user_config.task[x].minute = p_plug_task_minute->valueint;
+        user_config.task[x].repeat = p_plug_task_repeat->valueint;
+        user_config.task[x].on = p_plug_task_on->valueint;
+        user_config.task[x].r = r_task;
+        user_config.task[x].g = g_task;
+        user_config.task[x].b = b_task;
+        user_config.task[x].w = w_task;
+        user_config.task[x].gradient = gradient;
+
+        break;
+    }
+    cJSON_AddNumberToObject(json_plug_task_send, "on", user_config.task[x].on);
+    cJSON_AddNumberToObject(json_plug_task_send, "hour", user_config.task[x].hour);
+    cJSON_AddNumberToObject(json_plug_task_send, "minute", user_config.task[x].minute);
+    cJSON_AddNumberToObject(json_plug_task_send, "repeat", user_config.task[x].repeat);
+
+    char json_temp_str[24] = { 0 };
+    os_sprintf(json_temp_str, "[%d,%d,%d,%d]", user_config.task[x].r, user_config.task[x].g, user_config.task[x].b,
+            user_config.task[x].w);
+    cJSON_AddItemToObject(json_plug_task_send, "rgb", cJSON_Parse(json_temp_str));
+    uint16_t h_val;
+    uint8_t s_val, l_val;
+    RGB2HSL(user_config.task[x].r, user_config.task[x].g, user_config.task[x].b, &h_val, &s_val, &l_val);
+    os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w_now);
+    cJSON_AddItemToObject(json_plug_task_send, "hsl", cJSON_Parse(json_temp_str));
+    cJSON_AddNumberToObject(json_plug_task_send, "gradient", gradient);
+
+    cJSON_AddItemToObject(pJsonSend, plug_task_str, json_plug_task_send);
+    return return_flag;
+}
+
 /**
  * 函  数  名: user_json_init
  * 函数说明: json数据处理初始化
@@ -412,6 +531,6 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
 void ICACHE_FLASH_ATTR user_json_init(void)
 {
 
-    zlib_json_init(_json_deal_cb);
+    zlib_json_init(user_json_deal_cb);
     os_printf("user json init\n");
 }
