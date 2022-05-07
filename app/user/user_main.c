@@ -7,8 +7,21 @@
 #include "user_mqtt.h"
 #include "zlib_rtc.h"
 #include "user_json.h"
+#include "user_setting.h"
+#include "user_led.h"
 
 user_config_t user_config;
+
+uint8_t r = 0;    //r       //记录关闭前的颜色,不能全为0
+uint8_t g = 0;    //g
+uint8_t b = 0;    //b
+uint8_t w = 255;    //w
+
+uint8_t r_now;  //记录当前显示目标颜色,可以为0
+uint8_t g_now;
+uint8_t b_now;
+uint8_t w_now;
+int8_t on;    //开关
 
 void ICACHE_FLASH_ATTR _ota_result_cb(state_ota_result_state_t b)
 {
@@ -18,35 +31,16 @@ void ICACHE_FLASH_ATTR _ota_result_cb(state_ota_result_state_t b)
 void user_init(void)
 {
     uint8_t i;
+    uint32_t boot_times;
     uart_init(115200, 115200);
-    //os_delay_us(60000);
-    os_printf(" \n \nStart user%d.bin\n", system_upgrade_userbin_check() + 1);
-    os_printf("SDK version:%s\n", system_get_sdk_version());
-    os_printf("FW version:%s\n", VERSION);
-    //UART_SetPrintPort(1);
     os_printf(" \n \nStart user%d.bin\n", system_upgrade_userbin_check() + 1);
     os_printf("SDK version:%s\n", system_get_sdk_version());
     os_printf("FW version:%s\n", VERSION);
 
-    zlib_setting_get_config(&user_config, sizeof(user_config_t));
-    if(user_config.version != USER_CONFIG_VERSION)
-    {
-        char hwaddr[6];
-        char strMac[16];
-        //恢复默认设置
-        wifi_get_macaddr(STATION_IF, hwaddr);
-        os_sprintf(strMac, "%02x%02x%02x%02x%02x%02x", MAC2STR(hwaddr));
-        os_sprintf(user_config.name, DEVICE_NAME, strMac + 8);
-        os_sprintf(user_config.mqtt_ip, "");
-        os_sprintf(user_config.mqtt_user, "");
-        os_sprintf(user_config.mqtt_password, "");
-        user_config.mqtt_port = 1883;
-        user_config.version = USER_CONFIG_VERSION;
-        os_printf("config version error.Restore default settings\n");
-        zlib_setting_save_config(&user_config, sizeof(user_config_t));
-    }
+    boot_times=user_setting_init();
+    user_led_init();
 
-    zlib_wifi_init(false);
+    zlib_wifi_init(boot_times>4);
 
     zlib_web_config_init();
     user_mqtt_init();

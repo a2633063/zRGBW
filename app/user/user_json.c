@@ -5,8 +5,9 @@
 #include "user_config.h"
 #include "zlib.h"
 
+#include "user_setting.h"
+#include "user_led.h"
 #include "user_mqtt.h"
-
 
 /**
  * 函  数  名: _json_timer_fun
@@ -17,7 +18,7 @@
 static os_timer_t _timer_json;
 static void _json_timer_fun(void *arg)
 {
-    zlib_setting_save_config(&user_config, sizeof(user_config_t));
+    zlib_setting_save_flash(SETTING_SAVE_ADDR, &user_config, sizeof(user_config_t));
 }
 
 /**
@@ -30,6 +31,7 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
 {
     bool update_user_config_flag = false;   //标志位,记录最后是否需要更新储存的数据
     uint8_t retained = 0;
+    uint8_t i, gradient = 0;
     //解析device report
     cJSON *p_cmd = cJSON_GetObjectItem(pJsonRoot, "cmd");
     if(p_cmd && cJSON_IsString(p_cmd) && os_strcmp(p_cmd->valuestring, "device report") == 0)
@@ -84,6 +86,135 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         cJSON_AddStringToObject(json_send, "cmd", "restart");
     }
 
+    //解析gpio设置
+    cJSON *p_gpio = cJSON_GetObjectItem(pJsonRoot, "gpio");
+    if(p_gpio)
+    {
+        if(cJSON_IsArray(p_gpio) && cJSON_GetArraySize(p_gpio) > 3)
+        {
+            cJSON *p_gpio_r = cJSON_GetArrayItem(p_gpio, 0);
+            cJSON *p_gpio_g = cJSON_GetArrayItem(p_gpio, 1);
+            cJSON *p_gpio_b = cJSON_GetArrayItem(p_gpio, 2);
+            cJSON *p_gpio_w = cJSON_GetArrayItem(p_gpio, 3);
+            if(cJSON_IsNumber(p_gpio_r) && cJSON_IsNumber(p_gpio_g) && cJSON_IsNumber(p_gpio_b)
+                    && cJSON_IsNumber(p_gpio_w))
+            {
+                uint8_t gpio_r = p_gpio_r->valueint;
+                uint8_t gpio_g = p_gpio_g->valueint;
+                uint8_t gpio_b = p_gpio_b->valueint;
+                uint8_t gpio_w = p_gpio_w->valueint;
+
+                do
+                {
+                    if(gpio_r == gpio_g || gpio_r == gpio_b || gpio_r == gpio_w || gpio_g == gpio_b || gpio_g == gpio_w
+                            || gpio_b == gpio_w) break;
+
+                    //记录当前rgbw配置,若配置失败则还原配置
+                    uint8_t gpio_r_lase = user_config.gpio[0];
+                    uint8_t gpio_g_lase = user_config.gpio[1];
+                    uint8_t gpio_b_lase = user_config.gpio[2];
+                    uint8_t gpio_w_lase = user_config.gpio[3];
+
+                    user_config.gpio[0] = gpio_r;
+                    user_config.gpio[1] = gpio_g;
+                    user_config.gpio[2] = gpio_b;
+                    user_config.gpio[3] = gpio_w;
+                    if(user_led_gpio_config())
+                    {   //配置成功
+                        update_user_config_flag = true;
+                        user_led_set(0, 51, 0, 0, 0);   //配置rgbw gpio成功后,亮绿灯
+                    }
+                    else
+                    {   //配置失败 还原原配置
+                        os_printf("user_led_gpio_config fail [%d,%d,%d,%d]", user_config.gpio[0], user_config.gpio[1],
+                                user_config.gpio[2], user_config.gpio[3]);
+                        user_config.gpio[0] = gpio_r_lase;
+                        user_config.gpio[1] = gpio_g_lase;
+                        user_config.gpio[2] = gpio_b_lase;
+                        user_config.gpio[3] = gpio_w_lase;
+                    }
+                } while (0);
+            }
+
+        }
+        char json_temp_str[17] = { 0 };
+        os_sprintf(json_temp_str, "[%d,%d,%d,%d]", user_config.gpio[0], user_config.gpio[1], user_config.gpio[2],
+                user_config.gpio[3]);
+        cJSON_AddItemToObject(json_send, "gpio", cJSON_Parse(json_temp_str));
+    }
+
+    //解析渐变
+    cJSON *p_gradient = cJSON_GetObjectItem(pJsonRoot, "gradient");
+    if(p_gradient && cJSON_IsNumber(p_gradient) && p_gradient->valueint == 1)
+    {
+        gradient = 1;
+    }
+
+    //解析HSL颜色
+    cJSON *p_hsl = cJSON_GetObjectItem(pJsonRoot, "hsl");
+    if(p_hsl && cJSON_IsArray(p_hsl) && cJSON_GetArraySize(p_hsl) == 4)
+    {
+        cJSON *p_hsl_h = cJSON_GetArrayItem(p_hsl, 0);
+        cJSON *p_hsl_s = cJSON_GetArrayItem(p_hsl, 1);
+        cJSON *p_hsl_l = cJSON_GetArrayItem(p_hsl, 2);
+        cJSON *p_hsl_w = cJSON_GetArrayItem(p_hsl, 3);
+        if(cJSON_IsNumber(p_hsl_h) && cJSON_IsNumber(p_hsl_s) && cJSON_IsNumber(p_hsl_l) && cJSON_IsNumber(p_hsl_w))
+        {
+            os_printf("hsl:%d,%d,%d,%d\n", p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, p_hsl_w->valueint);
+
+            HSL2RGB(p_hsl_h->valueint, p_hsl_s->valueint, p_hsl_l->valueint, &r_now, &g_now, &b_now);
+            w_now = p_hsl_w->valueint;
+            user_led_set(r_now, g_now, b_now, w_now, gradient);
+        }
+    }
+    //解析RGB颜色
+    cJSON *p_rgb = cJSON_GetObjectItem(pJsonRoot, "rgb");
+    if(p_rgb && cJSON_IsArray(p_rgb) && cJSON_GetArraySize(p_rgb) == 4)
+    {
+        cJSON *p_rgb_r = cJSON_GetArrayItem(p_rgb, 0);
+        cJSON *p_rgb_g = cJSON_GetArrayItem(p_rgb, 1);
+        cJSON *p_rgb_b = cJSON_GetArrayItem(p_rgb, 2);
+        cJSON *p_rgb_w = cJSON_GetArrayItem(p_rgb, 3);
+        if(cJSON_IsNumber(p_rgb_r) && cJSON_IsNumber(p_rgb_g) && cJSON_IsNumber(p_rgb_b) && cJSON_IsNumber(p_rgb_w))
+        {
+            os_printf("rgb:%d,%d,%d,%d\n", p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint);
+
+            user_led_set(p_rgb_r->valueint, p_rgb_g->valueint, p_rgb_b->valueint, p_rgb_w->valueint, gradient);
+        }
+    }
+
+    //设置开关
+    cJSON *p_on = cJSON_GetObjectItem(pJsonRoot, "on");
+    if(p_on && cJSON_IsNumber(p_on))
+    {
+        retained = 1;
+        if(p_on->valueint == 0)
+            user_led_set(0, 0, 0, 0, gradient);
+        else
+        {
+            user_led_set(r, g, b, w, gradient);
+        }
+    }
+
+    if(p_hsl || p_rgb || p_on)
+    {
+
+        char json_temp_str[17] = { 0 };
+
+        os_sprintf(json_temp_str, "[%d,%d,%d,%d]", r_now, g_now, b_now, w_now);
+        cJSON_AddItemToObject(json_send, "rgb", cJSON_Parse(json_temp_str));
+        uint16_t h_val;
+        uint8_t s_val, l_val;
+        RGB2HSL(r_now, g_now, b_now, &h_val, &s_val, &l_val);
+        os_sprintf(json_temp_str, "[%d,%d,%d,%d]", h_val, s_val, l_val, w_now);
+        cJSON_AddItemToObject(json_send, "hsl", cJSON_Parse(json_temp_str));
+
+        retained = 1;
+        cJSON_AddNumberToObject(json_send, "on", on);
+        if(p_gradient)
+        cJSON_AddNumberToObject(json_send, "gradient", gradient);
+    }
+
     //返回wifi ssid及rssi
     cJSON *p_ssid = cJSON_GetObjectItem(pJsonRoot, "ssid");
     if(p_ssid)
@@ -100,6 +231,14 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
         }
     }
 
+    //测试
+    cJSON *p_test = cJSON_GetObjectItem(pJsonRoot, "test");
+    if(p_test && cJSON_IsNumber(p_test))
+    {
+        pwm_set_duty(p_test->valueint, 3);
+        pwm_start();
+        cJSON_AddNumberToObject(json_send, "test", p_test->valueint);
+    }
     cJSON *p_setting = cJSON_GetObjectItem(pJsonRoot, "setting");
     if(p_setting)
     {
@@ -224,7 +363,7 @@ static void ICACHE_FLASH_ATTR _json_deal_cb(void *arg, Wifi_Comm_type_t type, cJ
     {
         os_timer_disarm(&_timer_json);
         os_timer_setfn(&_timer_json, (os_timer_func_t *) _json_timer_fun, NULL);
-        os_timer_arm(&_timer_json, 2000, false); //2000毫秒后保存
+        os_timer_arm(&_timer_json, 1500, false); //1500毫秒后保存
 
         //zlib_setting_save_config(&user_config, sizeof(user_config_t));
         update_user_config_flag = false;
