@@ -385,7 +385,7 @@ void ICACHE_FLASH_ATTR user_json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON
                 && cJSON_IsString(p_mqtt_user) && p_mqtt_password && cJSON_IsString(p_mqtt_password)
                 && !zlib_mqtt_is_connected())
         {
-            zlib_reboot_delay(500);
+            zlib_reboot_delay(1000);
         }
     }
 
@@ -405,7 +405,7 @@ void ICACHE_FLASH_ATTR user_json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON
     {
         os_timer_disarm(&_timer_json);
         os_timer_setfn(&_timer_json, (os_timer_func_t *) _json_timer_fun, NULL);
-        os_timer_arm(&_timer_json, 1500, false); //1500毫秒后保存
+        os_timer_arm(&_timer_json, 800, false); //1500毫秒后保存
 
         //zlib_setting_save_config(&user_config, sizeof(user_config_t));
         update_user_config_flag = false;

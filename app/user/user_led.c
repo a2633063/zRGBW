@@ -141,6 +141,7 @@ void ICACHE_FLASH_ATTR
 user_led_init(void)
 {
     user_led_gpio_config();
+    user_led_set(0,0,0,255,1);
 }
 /**
  * 函  数  名: user_led_set_temp
