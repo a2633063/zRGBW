@@ -52,9 +52,9 @@ user_setting_init(void)
         str = zlib_wifi_get_mac_str();
         os_sprintf(user_config.name, DEVICE_NAME, str + 8);
         os_printf("device name:%s\n", user_config.name);
-        os_sprintf(user_config.mqtt_ip, "zipzhang.top");
-        os_sprintf(user_config.mqtt_user, "z");
-        os_sprintf(user_config.mqtt_password, "2633063");
+        os_sprintf(user_config.mqtt_ip, "");
+        os_sprintf(user_config.mqtt_user, "");
+        os_sprintf(user_config.mqtt_password, "");
         user_config.mqtt_port = 1883;
         user_config.version = USER_CONFIG_VERSION;
         user_config.gpio[0] = 15;
@@ -82,11 +82,11 @@ user_setting_init(void)
         zlib_setting_save_flash(SETTING_SAVE_ADDR, &user_config, sizeof(user_config_t));
     }
 
-    os_printf("setting:\n");
+    /*os_printf("setting:\n");
     os_printf("\tdevice name:%s\n", user_config.name);
     os_printf("\tauto_off:%d\n", user_config.auto_off);
     os_printf("\tgpio:[%d,%d,%d,%d]\n", user_config.gpio[0], user_config.gpio[1], user_config.gpio[2],
-            user_config.gpio[3]);
+            user_config.gpio[3]);*/
 
     os_printf("user setting init\n");
 

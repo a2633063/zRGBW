@@ -1,6 +1,5 @@
 #include <ctype.h>
 #include "ets_sys.h"
-#include "uart.h"
 #include "osapi.h"
 #include "user_interface.h"
 #include "user_config.h"
