@@ -63,7 +63,7 @@ user_led_timer_func(void *arg0)
     else if(arg == 2)
     {
         step++;
-        os_printf("[%d] ", step);
+        //os_printf("[%d] ", step);
 
         r_val = r_old + ((int16_t) r_now - (int16_t) r_old) * step / LED_GRADIENT_STEP;	//+50是为了四舍五入
         g_val = g_old + ((int16_t) g_now - (int16_t) g_old) * step / LED_GRADIENT_STEP;
@@ -141,7 +141,7 @@ void ICACHE_FLASH_ATTR
 user_led_init(void)
 {
     user_led_gpio_config();
-    user_led_set(0,0,0,255,1);
+    user_led_set(0,0,0,255,0);
 }
 /**
  * 函  数  名: user_led_set_temp
@@ -152,7 +152,7 @@ user_led_init(void)
 void ICACHE_FLASH_ATTR
 user_led_set_temp(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t w_val)
 {
-    os_printf("user_led_set:%d,%d,%d,%d\n", r_val, g_val, b_val, w_val);
+    //os_printf("user_led_set:%d,%d,%d,%d\n", r_val, g_val, b_val, w_val);
     r_real = r_val;
     g_real = g_val;
     b_real = b_val;
@@ -179,7 +179,7 @@ user_led_set_temp(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t w_val)
 void ICACHE_FLASH_ATTR
 user_led_set(uint8_t r_val, uint8_t g_val, uint8_t b_val, uint8_t w_val, uint8_t is_gradient)
 {
-
+    os_printf("user_led_set:%d,%d,%d,%d   %d\n", r_val, g_val, b_val, w_val,is_gradient);
     if(is_gradient != 1)
     {
         if(r_val == 0 && g_val == 0 && b_val == 0 && w_val == 00)

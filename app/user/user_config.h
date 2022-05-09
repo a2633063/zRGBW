@@ -21,7 +21,7 @@
 #define ZLIB_SETTING_SAVE_ADDR  (SETTING_SAVE_ADDR) 	//设置储存地址
 
 
-#define VERSION "v0.1.0"
+#define VERSION "v0.1.1"
 
 #define TYPE 8
 
