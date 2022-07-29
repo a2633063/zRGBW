@@ -281,8 +281,6 @@ void ICACHE_FLASH_ATTR user_json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON
     cJSON *p_test = cJSON_GetObjectItem(pJsonRoot, "test");
     if(p_test && cJSON_IsNumber(p_test))
     {
-        pwm_set_duty(p_test->valueint, 3);
-        pwm_start();
         cJSON_AddNumberToObject(json_send, "test", p_test->valueint);
     }
 

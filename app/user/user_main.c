@@ -36,10 +36,10 @@ void user_init(void)
     os_printf("SDK version:%s\n", system_get_sdk_version());
     os_printf("FW version:%s\n", VERSION);
 
-    boot_times=user_setting_init();
+    boot_times = user_setting_init();
     user_led_init();
 
-    zlib_wifi_init(boot_times>4);
+    zlib_wifi_init(boot_times > 4);
 
     zlib_web_config_init();
     user_mqtt_init();
@@ -51,5 +51,13 @@ void user_init(void)
     zlib_tcp_init(10182);
     zlib_ota_set_result_callback(_ota_result_cb);
 
+    if(wifi_get_opmode() == SOFTAP_MODE)
+    {
+        user_led_mode_wificonfig();
 
+    }
+    else
+    {
+        user_led_set(0, 0, 0, 255, 0);
+    }
 }
