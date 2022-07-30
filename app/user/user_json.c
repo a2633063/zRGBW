@@ -15,13 +15,13 @@ static void _json_timer_auto_off_fun(uint8 * gradient)
 {
     os_printf("auto off, gradient:%d\n", *gradient);
 
-    if(on != 0 )
+    if(on != 0)
     {
         cJSON *pJsonRoot = cJSON_CreateObject();
-        cJSON_AddStringToObject(pJsonRoot, "mac", zlib_wifi_get_mac_str() );
+        cJSON_AddStringToObject(pJsonRoot, "mac", zlib_wifi_get_mac_str());
         cJSON_AddNumberToObject(pJsonRoot, "on", 0);
         cJSON_AddNumberToObject(pJsonRoot, "gradient", *gradient);
-        user_json_deal_cb(NULL, WIFI_COMM_TYPE_MQTT, pJsonRoot,user_mqtt_get_set_topic());
+        user_json_deal_cb(NULL, WIFI_COMM_TYPE_MQTT, pJsonRoot, user_mqtt_get_set_topic());
         cJSON_Delete(pJsonRoot);
     }
     //user_led_set(0, 0, 0, 0, *gradient);
@@ -214,9 +214,9 @@ void ICACHE_FLASH_ATTR user_json_deal_cb(void *arg, Wifi_Comm_type_t type, cJSON
     if(p_on && cJSON_IsNumber(p_on))
     {
         retained = 1;
-        if(p_on->valueint == 0)
+        if(p_on->valueint == 0 || (p_on->valueint == -1 && on == 1))
             user_led_set(0, 0, 0, 0, gradient);
-        else
+        else if(p_on->valueint > 0 || (p_on->valueint == -1 && on == 0))
         {
             user_led_set(r, g, b, w, gradient);
         }
